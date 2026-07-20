@@ -17,12 +17,18 @@ export function H(n: number): number {
 
 /* Option ids for each filter question, mirroring QUESTIONS in
    menu-compiler.jsx. Only format/protein/style narrow the pool — heat and
-   side are zero-gain settings, not products (see rule 010-engine.mdc). */
-const FILTER_OPTIONS: Record<"format" | "protein" | "style", readonly string[]> = {
+   side are zero-gain settings, not products (see rule 010-engine.mdc).
+   Exported so flow.ts (which filter questions exist, in what order) and
+   tests (exhaustive path enumeration) share this single source of truth. */
+export const FILTER_OPTIONS: Record<"format" | "protein" | "style", readonly string[]> = {
   format: ["burger", "pitta", "wrap", "plate", "bowl"],
   protein: ["breast", "thigh", "wings", "veg"],
   style: ["classic", "cheesy", "garlicky", "loaded", "fresh"],
 };
+
+export const FILTER_QUESTION_IDS = Object.keys(FILTER_OPTIONS) as ReadonlyArray<
+  keyof typeof FILTER_OPTIONS
+>;
 
 export function subpool(pool: MenuItem[], qid: QuestionId, oid: string): MenuItem[] {
   if (qid === "format") return pool.filter((p) => p.format === oid);
