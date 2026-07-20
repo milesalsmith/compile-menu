@@ -140,7 +140,7 @@ export default function App() {
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 7,
+              gap: 10,
               background: "none",
               border: "none",
               color: T.text,
@@ -152,8 +152,8 @@ export default function App() {
             <img
               src="/compile-menu-mark.png"
               alt=""
-              width={18}
-              height={18}
+              width={40}
+              height={40}
               style={{ borderRadius: "50%", display: "block" }}
             />
             menu<span style={{ color: T.ember }}>_</span>compiler
