@@ -31,11 +31,11 @@ function isFilterId(qid: string | null): qid is "format" | "protein" | "style" {
 function walkIdentifyPaths(pool: MenuItem[], answers: Answers, leaves: TerminalPath[]): void {
   const state = nextQuestion(answers, pool);
 
-  if (isFilterId(state.current)) {
-    for (const oid of FILTER_OPTIONS[state.current]) {
-      const sub = subpool(pool, state.current, oid);
+  if (isFilterId(state.currentId)) {
+    for (const oid of FILTER_OPTIONS[state.currentId]) {
+      const sub = subpool(pool, state.currentId, oid);
       if (sub.length === 0) continue; // zero-count options are pruned before render
-      walkIdentifyPaths(sub, { ...answers, [state.current]: oid }, leaves);
+      walkIdentifyPaths(sub, { ...answers, [state.currentId]: oid }, leaves);
     }
     return;
   }

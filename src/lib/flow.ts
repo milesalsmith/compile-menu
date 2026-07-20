@@ -61,7 +61,10 @@ function phaseFor(current: QuestionId | null): Phase {
 }
 
 export interface FlowState {
-  current: QuestionId | null;
+  /* The next question to ask, or null when the flow is complete. Named
+     `currentId` (not `current`) deliberately: React Compiler's lint treats
+     any `.current` member access as a ref access. */
+  currentId: QuestionId | null;
   phase: Phase;
   gains: QuestionGain[];
   exhausted: ExhaustedQuestion[];
@@ -82,12 +85,12 @@ export function nextQuestion(answers: Answers, pool: MenuItem[]): FlowState {
     .map((x) => ({ qid: x.qid, gain: x.gain, reason: exhaustReason(x.qid, x.gain) }));
 
   if (gains.length && gains[0].gain > ASK_COST) {
-    return { current: gains[0].qid, phase: phaseFor(gains[0].qid), gains, exhausted: [] };
+    return { currentId: gains[0].qid, phase: phaseFor(gains[0].qid), gains, exhausted: [] };
   }
 
   const heatApplies = pool.some((p) => p.heat);
   if (answers.heat === undefined && heatApplies) {
-    return { current: "heat", phase: phaseFor("heat"), gains, exhausted };
+    return { currentId: "heat", phase: phaseFor("heat"), gains, exhausted };
   }
 
   if (answers.side === undefined) {
@@ -95,10 +98,10 @@ export function nextQuestion(answers: Answers, pool: MenuItem[]): FlowState {
       answers.heat === undefined && !heatApplies
         ? [...exhausted, { qid: "heat", gain: 0, reason: "not_applicable" }]
         : exhausted;
-    return { current: "side", phase: phaseFor("side"), gains, exhausted: finalExhausted };
+    return { currentId: "side", phase: phaseFor("side"), gains, exhausted: finalExhausted };
   }
 
-  return { current: null, phase: phaseFor(null), gains, exhausted };
+  return { currentId: null, phase: phaseFor(null), gains, exhausted };
 }
 
 export interface HistoryEntry {
