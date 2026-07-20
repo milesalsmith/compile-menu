@@ -227,7 +227,7 @@ export default function App() {
                   style={{ fontSize: 11, color: T.green, letterSpacing: "0.1em", margin: 0 }}
                 >
                   ✓ {resolved ? "PRODUCT IDENTIFIED" : `NARROWED TO ${pool.length} CANDIDATES`} IN{" "}
-                  {identifyCount} QUESTION{identifyCount === 1 ? "" : "S"} · 0.00 BITS REMAIN
+                  {identifyCount} QUESTION{identifyCount === 1 ? "" : "S"} · 0.00 BITS OF GAIN REMAIN
                 </p>
                 {resolved && (
                   <p
@@ -237,13 +237,21 @@ export default function App() {
                     {resolved.name}
                   </p>
                 )}
+                {!resolved && (
+                  <p className="mono" style={{ fontSize: 12.5, margin: "6px 0 0" }}>
+                    <span style={{ color: T.gold, fontWeight: 600 }}>
+                      {bits.toFixed(2)} bit{Math.abs(bits - 1) < 1e-9 ? "" : "s"}
+                    </span>{" "}
+                    <span style={{ color: T.dim }}>resolved by tie-break, not a question</span>
+                  </p>
+                )}
                 <p
                   className="mono"
                   style={{ fontSize: 11.5, color: T.faint, margin: "8px 0 0", lineHeight: 1.65 }}
                 >
                   {resolved
                     ? "no remaining question carries information about which item you get."
-                    : "no remaining question clears the asking cost — the tie-break will resolve these."}
+                    : "no remaining question clears the asking cost — not worth a tap."}
                   <br />
                   what's left are settings. they change your order, not which product it is.
                 </p>
