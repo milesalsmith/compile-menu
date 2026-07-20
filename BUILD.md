@@ -360,11 +360,11 @@ compresses decisions; this makes why-it-works legible and portable."
 
 ## 8. Ship checklist
 
-- [ ] Vitest engine tests pass (Section 3 numbers)
+- [x] Vitest engine tests pass (Section 3 numbers)
 - [ ] Deterministic demo live at compile.menu
 - [ ] "Compile your own" works on pasted text and a PDF
-- [ ] API key absent from git history
-- [ ] No branded product names in dataset, UI, or extraction output
+- [x] API key absent from git history
+- [x] No branded product names in dataset, UI, or extraction output
 - [ ] Mobile-clean (the demo IS the phone), reduced-motion respected
 - [ ] OG image + meta tags so the link unfurls on LinkedIn
 - [ ] Demo clips recorded; Cursor chat history saved
