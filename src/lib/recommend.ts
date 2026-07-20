@@ -34,7 +34,7 @@ export function recommend(answers: Answers, universe: MenuItem[]): RecommendResu
 /* Sides are a zero-gain setting (see 010-engine.mdc) — identical on every
    main, so the pair is just read off the chosen bucket (or a "surprise"
    spin across buckets), never derived from the pool. */
-const SIDES = {
+export const SIDES = {
   crispy: ["Salted Chips", "Garlic Bread"],
   filling: ["Spicy Rice", "Creamy Mash"],
   fresh: ["Crunchy Slaw", "Corn on the Cob"],
