@@ -149,7 +149,6 @@ interface DecompileLogProps {
 }
 
 export default function DecompileLog({ universe, diet, stats, onComplete }: DecompileLogProps) {
-  const [logIndex, setLogIndex] = useState(0);
   const [reducedMotion] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -159,40 +158,24 @@ export default function DecompileLog({ universe, diet, stats, onComplete }: Deco
 
   const LOG = useMemo(() => buildLog(universe, diet, stats), [universe, diet, stats]);
 
-  useEffect(() => {
-    if (reducedMotion) {
-      const t = setTimeout(onComplete, 700);
-      return () => clearTimeout(t);
-    }
-    if (logIndex < LOG.length) {
-      const t = setTimeout(() => setLogIndex((i) => i + 1), LOG[logIndex].d);
-      return () => clearTimeout(t);
-    }
-    const t = setTimeout(onComplete, 1000);
-    return () => clearTimeout(t);
-  }, [logIndex, reducedMotion, LOG, onComplete]);
+  // Reduced-motion skips the stagger but still lands on the dwell/confirm step —
+  // it renders complete immediately rather than auto-advancing.
+  const [logIndex, setLogIndex] = useState(() => (reducedMotion ? LOG.length : 0));
+  const complete = logIndex >= LOG.length;
 
-  return (
-    <button
-      onClick={onComplete}
-      aria-label="Skip animation"
-      className="mono rise"
-      style={{
-        display: "block",
-        width: "100%",
-        textAlign: "left",
-        background: "#12100D",
-        border: `1px solid ${T.line}`,
-        borderRadius: 10,
-        padding: "20px 22px",
-        fontSize: 13,
-        lineHeight: 1.95,
-        color: T.text,
-      }}
-    >
+  useEffect(() => {
+    if (reducedMotion || complete) return;
+    const t = setTimeout(() => setLogIndex((i) => i + 1), LOG[logIndex].d);
+    return () => clearTimeout(t);
+  }, [logIndex, reducedMotion, LOG, complete]);
+
+  const fastForward = () => setLogIndex(LOG.length);
+
+  const lines = (
+    <>
       <p style={{ margin: "0 0 8px", color: T.dim }}>
-        $ decompile ./menu{diet !== "all" ? ` --require ${diet}` : ""}{" "}
-        <span style={{ color: T.faint }}>— tap to skip</span>
+        $ decompile ./menu{diet !== "all" ? ` --require ${diet}` : ""}
+        {!complete && <span style={{ color: T.faint }}> — tap to skip ahead</span>}
       </p>
       {LOG.slice(0, logIndex).map((l, i) => (
         <p key={i} style={{ margin: 0, whiteSpace: "pre-wrap", overflowWrap: "break-word" }}>
@@ -203,11 +186,61 @@ export default function DecompileLog({ universe, diet, stats, onComplete }: Deco
           ))}
         </p>
       ))}
-      {logIndex < LOG.length && (
+      {!complete && (
         <span className="cursor" style={{ color: T.gold }}>
           ▋
         </span>
       )}
-    </button>
+    </>
+  );
+
+  const panelStyle = {
+    display: "block",
+    width: "100%",
+    textAlign: "left" as const,
+    background: "#12100D",
+    border: `1px solid ${T.line}`,
+    borderRadius: 10,
+    padding: "20px 22px",
+    fontSize: 13,
+    lineHeight: 1.95,
+    color: T.text,
+  };
+
+  return (
+    <div className="rise">
+      {complete ? (
+        <div className="mono" style={panelStyle}>
+          {lines}
+        </div>
+      ) : (
+        <button
+          onClick={fastForward}
+          aria-label="Skip ahead to the full log"
+          className="mono"
+          style={panelStyle}
+        >
+          {lines}
+        </button>
+      )}
+      {complete && (
+        <button
+          onClick={onComplete}
+          className="mono"
+          style={{
+            background: T.ember,
+            border: "none",
+            color: "#1A0F08",
+            fontWeight: 600,
+            fontSize: 14,
+            padding: "12px 22px",
+            borderRadius: 8,
+            marginTop: 14,
+          }}
+        >
+          Continue →
+        </button>
+      )}
+    </div>
   );
 }
