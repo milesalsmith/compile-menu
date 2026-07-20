@@ -54,8 +54,10 @@ export default function Landing({
           marginBottom: 34,
         }}
       >
-        A decompiler for restaurant menus. It finds the decisions hiding under the products — then
-        asks you those instead.
+        Modelled on a real, well-known flame-grilled chicken menu.
+        <br />
+        It compresses a complicated menu into as few questions as possible, so you land on exactly
+        what to order.
       </p>
 
       <div
