@@ -138,6 +138,9 @@ export default function App() {
             onClick={restart}
             className="mono"
             style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
               background: "none",
               border: "none",
               color: T.text,
@@ -146,6 +149,13 @@ export default function App() {
               padding: 0,
             }}
           >
+            <img
+              src="/compile-menu-mark.png"
+              alt=""
+              width={18}
+              height={18}
+              style={{ borderRadius: "50%", display: "block" }}
+            />
             menu<span style={{ color: T.ember }}>_</span>compiler
           </button>
           {(screen === "questions" || screen === "results") && (
