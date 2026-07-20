@@ -1,0 +1,43 @@
+---
+description: The ID3 entropy engine — invariants and verified numbers
+globs: ["src/lib/entropy.ts", "src/lib/flow.ts", "src/lib/recommend.ts", "**/*.test.ts"]
+alwaysApply: false
+---
+
+# Engine invariants
+
+The engine is the heart of the project. Any change here must preserve these
+verified numbers — they are the acceptance tests. If a change breaks one,
+the change is wrong, not the number.
+
+## Definitions
+- `H(n) = 0 for n <= 1, else log2(n)` — entropy of a pool under a uniform prior.
+- `subpool(pool, qid, oid)` — hard filter for format/protein/style. veg option
+  matches vegetarian items; meat options exclude vegetarian items. Heat and
+  side never narrow the pool.
+- `gain(qid, pool)` = 0 for config questions (heat, side); else
+  `H(pool) - sum over non-empty branches of (branchSize/total) * H(branchSize)`.
+  Branches may overlap (breast|thigh items appear in two) — this is the
+  generalisation from textbook ID3, and it is intentional.
+- `ASK_COST = 0.5` bits. Next question = highest-gain unanswered filter
+  question IF its gain > ASK_COST; else heat (only if any remaining item has
+  heat), then side, then done.
+
+## Verified numbers (must hold on the 24-item demo dataset)
+- `H(24) ≈ 4.585`
+- Opening gains: format ≈ 2.28, style ≈ 1.61, protein ≈ 1.32. Format asked first.
+- `format=plate` then `protein=thigh` → `gain(style) = 0` → style self-removes.
+- `format=burger` then `protein=veg` → no survivor has heat → heat self-removes.
+- Vegetarian universe = 7 items (2.81 bits); vegan universe = 2 items (1.00 bit).
+- Under vegan, protein AND style both hit 0 gain → flow collapses to one question.
+- Worst-case survivors after all filter answers = 3 (classic breast burgers).
+- ASK_COST fires on exactly 2 of 23 terminal paths (wrap→breast, bowl→breast,
+  where style is worth ~0.33 bits). Survivor distribution: {1: 15, 2: 5, 3: 3}.
+
+## Rules
+- Tie-breaks (when survivors are identical on every asked dimension) are
+  disclosed AS tie-breaks in the UI, never presented as the engine.
+- Question order is COMPUTED and re-ranked after every answer. Never hardcode
+  a fixed order.
+- Prefer pure functions with no React dependency in `lib/` so they're
+  unit-testable in isolation.

@@ -1,0 +1,49 @@
+---
+description: Core project context, stack, and settled decisions for compile.menu
+alwaysApply: true
+---
+
+# compile.menu — project rules
+
+A decision compiler for restaurant menus. It decompiles a menu into its
+underlying decision structure, measures the menu's entropy in bits, and asks
+the highest-information question at each step until one order remains.
+
+**Thesis:** restaurants expose products; customers make decisions. The tool
+recovers the decisions hiding under the products.
+
+## Stack (do not substitute without being asked)
+- Vite + React + TypeScript (SPA)
+- Cloudflare Workers via `@cloudflare/vite-plugin` (static assets + one `/api/*` route)
+- pnpm, Node 22+, developed WSL2-native (Linux = production parity)
+- Vitest for tests
+- Anthropic API for menu extraction ONLY (never for recommendation logic)
+
+## Settled decisions — treat as constraints, do not relitigate or "improve"
+1. Engine is ID3-style information-gain induction, generalised for
+   multi-valued attributes (branches can overlap; weights are normalised
+   branch sizes). NOT a heuristic score. NOT C4.5 — no gain ratio, no pruning,
+   no continuous attributes.
+2. `ASK_COST = 0.5` bits: a question is only asked if its gain clears the bar;
+   below-bar questions self-remove with a visible reason.
+3. Heat and sides are zero-gain settings, not products. This must fall out of
+   the entropy math, never be hardcoded as a special case.
+4. Dietary requirements (vegetarian/vegan) are CONSTRAINTS applied before the
+   flow — they shrink the universe and never enter the gain ranking.
+5. Allergens / gluten-free are OUT. Never add an allergen field to any schema,
+   never let the LLM infer safety-critical data. This exclusion is deliberate.
+6. NO real branded product names anywhere — dataset, UI, or extraction output.
+   Items are described generically by their components. Do not add a
+   "(on menu as X)" mapping. This is a hard rule, not a stylistic preference.
+7. Deterministic engine + one fenced probabilistic step (extraction). Never
+   blur this boundary. The recommendation logic is always deterministic.
+8. No expert / "I know what I want" bypass path — it contradicts the product.
+9. No live URL scraping — paste text and PDF upload only.
+
+## How to work in this repo
+- Small, focused commits with clear messages — the commit history is portfolio
+  evidence. Never squash the port into one commit.
+- When porting from the reference `menu-compiler.jsx`, split by concern into
+  the structure defined in the components/lib rules. Do not paste it as one blob.
+- Verify engine changes against the known numbers (see the engine rule) before
+  considering them done.

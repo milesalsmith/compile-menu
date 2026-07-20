@@ -1,0 +1,35 @@
+---
+description: Cloudflare Worker routing and the Anthropic extraction endpoint
+globs: ["worker/**/*.ts", "wrangler.jsonc", "vite.config.ts"]
+alwaysApply: false
+---
+
+# Worker + extraction rules
+
+## Routing
+- `/api/*` requests run the Worker script first; everything else falls through
+  to the static assets binding (`env.ASSETS.fetch(request)`).
+- With `@cloudflare/vite-plugin` you do NOT hand-write `assets.directory`.
+- SPA fallback: `not_found_handling: "single-page-application"`.
+
+## Extraction endpoint (`POST /api/extract`)
+- Reads `{ menuText: string }`, cap length (~50k chars).
+- Model: `claude-haiku-4-5-20251001` (fast, cheap, scoped — NOT Opus).
+- Endpoint `https://api.anthropic.com/v1/messages`, headers `x-api-key`,
+  `anthropic-version: 2023-06-01`, `content-type: application/json`.
+- API key from `env.ANTHROPIC_API_KEY` — a Wrangler SECRET. Never in the repo,
+  never sent to the client, never logged.
+- System prompt must demand a JSON array only (no prose, no markdown fences).
+  Parse defensively: strip accidental fences, JSON.parse in try/catch.
+- The extraction schema must describe each item by COMPONENTS with NO branded
+  product name, and must NOT include any allergen/gluten-free field. The
+  "no branded name" instruction is the product working, not a disclaimer.
+- Validate every returned element against the MenuItem type; drop malformed
+  entries; require >= 4 valid items or show a friendly error.
+- The engine that consumes the result stays deterministic. Extraction is the
+  only probabilistic step in the whole app.
+
+## Telemetry (only if built)
+- Fire-and-forget via `navigator.sendBeacon`; never block the UI.
+- No cookies, no user IDs, no IP storage, no free text. Event name + numeric
+  fields only. Failures silently dropped.

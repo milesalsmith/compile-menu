@@ -1,0 +1,31 @@
+---
+description: React component structure and UI conventions
+globs: ["src/components/**/*.tsx", "src/App.tsx"]
+alwaysApply: false
+---
+
+# UI rules
+
+## Structure (split the reference single-file into these)
+- `Landing.tsx` — clean compiler-feel first screen, diet toggle, and a
+  collapsible "how this tool works" disclosure. Keep it sparse.
+- `DecompileLog.tsx` — the four-stage READ / TOKENIZE / MEASURE / BUILD
+  animation, data-derived, tap-to-skip. Must reflect the real dataset numbers.
+- `QuestionCard.tsx` — option cards; in "show working" mode each shows the
+  surviving-count and bits badge.
+- `WorkingPanel.tsx` — gain ranking vs ASK_COST, candidate pool, entropy trace.
+- `Results.tsx` — order card (waiter-ready: product, cut, explicit spice line,
+  sides), nearest alternative, working trace, compression stats.
+
+## Conventions
+- The entropy meter belongs to the IDENTIFY phase only. Once the product is
+  resolved (0 bits / pool of 1), switch to a settings tracker — never show a
+  full meter while still asking questions. Identify vs configure are distinct
+  phases and the UI must say which one it's in.
+- Respect `prefers-reduced-motion` — animations already gate on it, keep that.
+- Mobile-first: this is demoed from a phone. Test narrow viewports.
+- Show, don't assert: when the app makes a claim ("product identified"), the
+  next thing on screen must be consistent with it. Never let the UI say "done"
+  and then ask another question.
+- Keep the "show working" transparency layer — it's the point of the project,
+  not debug chrome. It should read as intentional.
