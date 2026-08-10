@@ -2,7 +2,7 @@
 
 **A decision compiler for restaurant menus.**
 
-Live: [compile-menu.milesalsmithrog.workers.dev](https://compile-menu.milesalsmithrog.workers.dev)
+Live: https://compile.menu
 
 Restaurants expose products. Customers make decisions. compile.menu decompiles
 a menu into its underlying decision structure, measures the menu's entropy in
