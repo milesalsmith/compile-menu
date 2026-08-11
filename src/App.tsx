@@ -59,6 +59,7 @@ export default function App() {
   const configQs = useMemo<QuestionId[]>(() => {
     const list: QuestionId[] = [];
     if (pool.some((p) => p.heat)) list.push("heat");
+    if (pool.some((p) => p.portion)) list.push("portion");
     list.push("side");
     return list;
   }, [pool]);
@@ -74,6 +75,8 @@ export default function App() {
     [screen, answers, universe]
   );
   const heatMeta = HEAT.find((h) => h.id === answers.heat);
+  const portionLabel =
+    answers.portion === "single" ? "Single" : answers.portion === "double" ? "Double" : null;
 
   /* Answering is the only action that can complete the flow, so we detect
      completion here (in the event handler) rather than in an effect: apply
@@ -361,6 +364,7 @@ export default function App() {
             result={result}
             answers={answers}
             heatMeta={heatMeta}
+            portionLabel={portionLabel}
             sideNames={sideNames}
             identifyCount={identifyCount}
             configDone={configDone}

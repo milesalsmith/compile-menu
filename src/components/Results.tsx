@@ -11,6 +11,7 @@ interface ResultsProps {
   result: RecommendResult;
   answers: Answers;
   heatMeta?: HeatLevel;
+  portionLabel: string | null;
   sideNames: string[] | null;
   identifyCount: number;
   configDone: number;
@@ -27,6 +28,7 @@ export default function Results({
   result,
   answers,
   heatMeta,
+  portionLabel,
   sideNames,
   identifyCount,
   configDone,
@@ -101,7 +103,7 @@ export default function Results({
           <p
             style={{
               fontSize: 14,
-              margin: "0 0 18px",
+              margin: "0 0 8px",
               display: "flex",
               alignItems: "center",
               gap: 8,
@@ -122,8 +124,21 @@ export default function Results({
             </span>
           </p>
         ) : (
-          <p style={{ fontSize: 13, color: T.faint, margin: "0 0 18px" }}>
+          <p style={{ fontSize: 13, color: T.faint, margin: "0 0 8px" }}>
             {answers.heat ? "Spice isn't a setting on this item" : ""}
+          </p>
+        )}
+        {result.pick.portion && portionLabel ? (
+          <p style={{ fontSize: 14, margin: "0 0 18px", color: T.text }}>
+            <span style={{ fontWeight: 600 }}>Portion: {portionLabel}</span>
+            <span style={{ color: T.dim }}>
+              {" "}
+              — {portionLabel === "Double" ? "two breasts" : "one breast"}
+            </span>
+          </p>
+        ) : (
+          <p style={{ fontSize: 13, color: T.faint, margin: "0 0 18px" }}>
+            {answers.portion ? "Portion isn't a setting on this item" : ""}
           </p>
         )}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
