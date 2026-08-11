@@ -1,4 +1,4 @@
-import type { ConversionOutcome, MenuAiPort, ModelOutcome, UploadedFile } from "../src/lib/extraction/pipeline";
+import type { ConversionOutcome, ConvertibleFile, MenuAiPort, ModelOutcome } from "../src/lib/extraction/pipeline";
 import { PDF_MIME } from "../src/lib/extraction/pipeline";
 import {
   EXTRACTION_JSON_SCHEMA,
@@ -22,16 +22,18 @@ function messageOf(error: unknown): string {
 
 export function menuAi(ai: Ai): MenuAiPort {
   return {
-    async toMarkdown(file: UploadedFile): Promise<ConversionOutcome> {
+    async toMarkdown(file: ConvertibleFile): Promise<ConversionOutcome> {
       try {
-        const blob = new Blob([await file.bytes()], { type: PDF_MIME });
+        const blob = new Blob([file.bytes], { type: PDF_MIME });
         /* Document metadata is token noise for extraction. */
         const converted = await ai.toMarkdown(
           { name: file.name, blob },
           { conversionOptions: { pdf: { metadata: false } } }
         );
         if (converted.format === "error") return { ok: false, reason: "conversion_failed" };
-        return { ok: true, markdown: converted.data };
+        /* The detected type travels back with the text: the caller decides
+           whether it matches what was claimed. */
+        return { ok: true, markdown: converted.data, mimeType: converted.mimeType };
       } catch {
         return { ok: false, reason: "ai_unavailable" };
       }

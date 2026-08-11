@@ -10,9 +10,31 @@ function error(status: number, code: string, message: string): Response {
   return Response.json({ code, error: message }, { status });
 }
 
+/* Cloudflare's own rate limiter, keyed on the caller. Deliberately not a
+   counter we store: extraction is the only expensive route here, and the
+   platform can turn requests away without this Worker keeping state. */
+const RATE_LIMIT_WINDOW_SECONDS = 60;
+
+async function withinRateLimit(request: Request, env: Env): Promise<boolean> {
+  const key = request.headers.get("CF-Connecting-IP") ?? "anonymous";
+  const { success } = await env.EXTRACT_LIMIT.limit({ key });
+  return success;
+}
+
 async function handleExtract(request: Request, env: Env): Promise<Response> {
   if (request.method !== "POST") {
     return error(405, "method_not_allowed", "Use POST to upload a menu.");
+  }
+
+  /* Before the body is read and long before anything reaches Workers AI. */
+  if (!(await withinRateLimit(request, env))) {
+    const response = error(
+      429,
+      "rate_limited",
+      "That's a lot of menus at once. Wait a minute and try again."
+    );
+    response.headers.set("Retry-After", String(RATE_LIMIT_WINDOW_SECONDS));
+    return response;
   }
 
   let form: FormData;
