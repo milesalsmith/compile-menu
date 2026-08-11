@@ -26,8 +26,9 @@ recovers the decisions hiding under the products.
    no continuous attributes.
 2. `ASK_COST = 0.5` bits: a question is only asked if its gain clears the bar;
    below-bar questions self-remove with a visible reason.
-3. Heat and sides are zero-gain settings, not products. This must fall out of
-   the entropy math, never be hardcoded as a special case.
+3. Heat, portion and sides are zero-gain settings, not products. This must fall
+   out of the entropy math, never be hardcoded as a special case. Portion
+   (single vs double) applies only to the classic grilled handhelds.
 4. Dietary requirements (vegetarian/vegan) are CONSTRAINTS applied before the
    flow — they shrink the universe and never enter the gain ranking.
 5. Allergens / gluten-free are OUT. Never add an allergen field to any schema,

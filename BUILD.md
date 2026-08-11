@@ -24,7 +24,7 @@ into a proper repo, not reinvent it. Keep it open in a tab throughout.
    Entropy of the candidate pool = log2(N) under a uniform prior. Gain of a
    question = current entropy minus branch-size-weighted expected entropy.
    Always ask the argmax-gain question. Verified against the dataset:
-   H(menu) = 4.585 bits; opening gains format 2.28 > style 1.61 > protein 1.32.
+   H(menu) = 4.392 bits; opening gains format 2.27 > style 1.63 > protein 1.34.
 2. **Honest naming:** call it "ID3-style, generalised for multi-valued
    attributes" (breast|thigh items sit in two branches, so branches overlap
    and weights are normalised branch sizes). Do NOT claim C4.5 — gain ratio,
@@ -33,10 +33,11 @@ into a proper repo, not reinvent it. Keep it open in a tab throughout.
    every asked dimension (worst case: 3 items), a small preference rule picks
    (exact-cut items, stronger style overlap). Labelled in the UI as a
    tie-break, never presented as the engine.
-4. **Zero-gain questions remove themselves and say why.** Heat and sides have
-   0 bits of gain about which product you get — the math derives that they're
-   settings, not products. Filter questions that run dry mid-flow also
-   self-remove with the reason shown.
+4. **Zero-gain questions remove themselves and say why.** Heat, portion and
+   sides have 0 bits of gain about which product you get — the math derives
+   that they're settings, not products. Portion (single vs double) applies
+   only to the three classic grilled handhelds. Filter questions that run dry
+   mid-flow also self-remove with the reason shown.
 5. **No expert / "I know what I want" path.** Contradicts the product.
 6. **"Show working" is a first-class toggle**, not a buried panel: live gain
    ranking in bits, candidate pool, per-answer entropy trace, tie-break table.
@@ -64,8 +65,9 @@ into a proper repo, not reinvent it. Keep it open in a tab throughout.
    self-remove with the reason shown ("gain 0.33 < 0.50 asking cost — not
    worth a tap") and the tie-break resolves survivors. This is
    cost-sensitive decision-tree induction. Verified by exhaustive path
-   simulation: fires on 2 of 23 terminal paths, worst-case survivors stays
-   at 3, 15/23 paths still resolve to exactly one product. Structural
+   simulation: fires on 1 of 23 terminal paths (bowl→breast), worst-case
+   survivors stays at 3, 17/23 paths still resolve to exactly one product.
+   Structural
    parallel to Cursor's Tab policy (suggest only when P(accept) > 25%,
    per their online-RL blog post): both integrate "is this interruption
    worth it?" into the mechanism itself rather than bolting on a filter.
@@ -145,7 +147,7 @@ compile-menu/
 │   └── index.ts            # /api/extract → Anthropic; else ASSETS
 ├── src/
 │   ├── data/
-│   │   └── demo-menu.ts    # the 24-item generic dataset (paste from artifact)
+│   │   └── demo-menu.ts    # the 21-item generic dataset (portion-as-config)
 │   ├── lib/
 │   │   ├── types.ts        # MenuItem, Question, Answers
 │   │   ├── entropy.ts      # H, subpool, gain  ← the ID3 engine
@@ -179,32 +181,34 @@ the API feature. A live deterministic site is the safety net.
 > `H(n)` = 0 for n<=1 else log2(n); `subpool(pool, qid, oid)` applying hard
 > filters for format/protein/style (veg handled as: veg option matches
 > veg items, meat options exclude veg items); `gain(qid, pool)` = 0 for
-> config questions (heat, side), else H(pool) minus the branch-size-weighted
-> expected entropy over non-empty option branches (branches may overlap
-> because some items support multiple proteins — weights are normalised
-> branch sizes). Export `ASK_COST = 0.5` (bits). In `flow.ts`: the next
-> question is the argmax-gain unanswered filter question if its gain >
-> ASK_COST; otherwise heat (only if any
-> remaining item has heat=true), then side, then done. Track which questions
-> self-removed and why. Expose an entropy trace: for each answer, pool size
-> and H before/after.
+> config questions (heat, portion, side), else H(pool) minus the
+> branch-size-weighted expected entropy over non-empty option branches
+> (branches may overlap because some items support multiple proteins —
+> weights are normalised branch sizes). Export `ASK_COST = 0.5` (bits). In
+> `flow.ts`: the next question is the argmax-gain unanswered filter question
+> if its gain > ASK_COST; otherwise heat (only if any remaining item has
+> heat=true), then portion (only if any remaining item has portion=true),
+> then side, then done. Track which questions self-removed and why. Expose
+> an entropy trace: for each answer, pool size and H before/after.
 
 **Acceptance tests** (write these as actual Vitest tests — they're also your
 interview evidence):
 
-- `H(24) ≈ 4.585`
-- Opening gains on the demo dataset: format ≈ 2.28, style ≈ 1.61,
-  protein ≈ 1.32; format is asked first
+- `H(21) ≈ 4.392`
+- Opening gains on the demo dataset: format ≈ 2.27, style ≈ 1.63,
+  protein ≈ 1.34; format is asked first
 - `format=plate` then `protein=thigh` → `gain(style) = 0` → style self-removes
 - `format=burger` then `protein=veg` → no survivor has heat → heat self-removes
-- Worst-case survivors after all filter answers = 3 (classic breast burgers);
-  tie-break selects deterministically
+- `format=wrap` then `protein=breast` → one portion-configurable survivor →
+  style is zero-gain (not below ASK_COST)
+- Worst-case survivors after all filter answers = 3; tie-break selects
+  deterministically
 - Every reachable answer path terminates (no empty pools shown — zero-count
   options are pruned before render)
-- ASK_COST threshold: `format=wrap` then `protein=breast` → `gain(style) ≈
-  0.33 < 0.5` → style never asked, tie-break resolves 2 survivors. Same for
-  `format=bowl` then `protein=breast`. Exhaustive path walk: threshold fires
-  on exactly 2/23 terminal paths; survivor distribution {1: 15, 2: 5, 3: 3}
+- ASK_COST threshold: `format=bowl` then `protein=breast` → `gain(style) ≈
+  0.33 < 0.5` → style never asked, tie-break resolves 2 survivors. Exhaustive
+  path walk: threshold fires on exactly 1/23 terminal paths; survivor
+  distribution {1: 17, 2: 4, 3: 2}
 
 ---
 

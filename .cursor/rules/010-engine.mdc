@@ -13,26 +13,32 @@ the change is wrong, not the number.
 ## Definitions
 - `H(n) = 0 for n <= 1, else log2(n)` — entropy of a pool under a uniform prior.
 - `subpool(pool, qid, oid)` — hard filter for format/protein/style. veg option
-  matches vegetarian items; meat options exclude vegetarian items. Heat and
-  side never narrow the pool.
-- `gain(qid, pool)` = 0 for config questions (heat, side); else
+  matches vegetarian items; meat options exclude vegetarian items. Heat,
+  portion and side never narrow the pool.
+- `gain(qid, pool)` = 0 for config questions (heat, portion, side); else
   `H(pool) - sum over non-empty branches of (branchSize/total) * H(branchSize)`.
   Branches may overlap (breast|thigh items appear in two) — this is the
   generalisation from textbook ID3, and it is intentional.
 - `ASK_COST = 0.5` bits. Next question = highest-gain unanswered filter
   question IF its gain > ASK_COST; else heat (only if any remaining item has
-  heat), then side, then done.
+  heat), then portion (only if any remaining item has portion), then side,
+  then done.
+- Portion (single vs double) is a setting on the three classic grilled
+  handhelds only — not a separate product. Butterfly / 1/4 vs 1/2 chicken
+  stay distinct products.
 
-## Verified numbers (must hold on the 24-item demo dataset)
-- `H(24) ≈ 4.585`
-- Opening gains: format ≈ 2.28, style ≈ 1.61, protein ≈ 1.32. Format asked first.
+## Verified numbers (must hold on the 21-item demo dataset)
+- `H(21) ≈ 4.392`
+- Opening gains: format ≈ 2.27, style ≈ 1.63, protein ≈ 1.34. Format asked first.
 - `format=plate` then `protein=thigh` → `gain(style) = 0` → style self-removes.
 - `format=burger` then `protein=veg` → no survivor has heat → heat self-removes.
+- `format=wrap` then `protein=breast` → one portion-configurable survivor →
+  style is zero-gain (not below ASK_COST).
 - Vegetarian universe = 7 items (2.81 bits); vegan universe = 2 items (1.00 bit).
 - Under vegan, protein AND style both hit 0 gain → flow collapses to one question.
-- Worst-case survivors after all filter answers = 3 (classic breast burgers).
-- ASK_COST fires on exactly 2 of 23 terminal paths (wrap→breast, bowl→breast,
-  where style is worth ~0.33 bits). Survivor distribution: {1: 15, 2: 5, 3: 3}.
+- Worst-case survivors after all filter answers = 3.
+- ASK_COST fires on exactly 1 of 23 terminal paths (bowl→breast, where style
+  is worth ~0.33 bits). Survivor distribution: {1: 17, 2: 4, 3: 2}.
 
 ## Rules
 - Tie-breaks (when survivors are identical on every asked dimension) are
