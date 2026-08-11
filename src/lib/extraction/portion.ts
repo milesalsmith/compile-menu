@@ -57,23 +57,31 @@ export function stripSizeQualifier(name: string): string {
   return cleaned.length > 0 ? cleaned : name.trim();
 }
 
+function baseName(name: string): string {
+  return stripSizeQualifier(name).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/* Two entries are the same dish only if EVERYTHING the engine decides on
+   agrees — not just the name with its size word removed. A matching base
+   name on differing attributes means they are different products that happen
+   to be named alike, and merging them would erase a real branch of the
+   decision tree. */
 function groupKey(item: CompiledItem): string {
   return [
-    stripSizeQualifier(item.name).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(),
+    baseName(item.name),
     item.format,
-    item.vegetarian ? "v" : "-",
-    item.vegan ? "V" : "-",
+    [...item.proteins].sort().join(","),
+    [...item.styles].sort().join(","),
+    item.vegetarian ? "veg" : "-",
+    item.vegan ? "vegan" : "-",
+    item.heat ? "heat" : "-",
   ].join("|");
 }
 
-function union(a: string[], b: string[]): string[] {
-  const out = [...a];
-  for (const value of b) if (!out.includes(value)) out.push(value);
-  return out;
-}
-
-/* Items that describe the same dish at different sizes become one item with
-   portion: true, keeping the earliest occurrence's name minus the size word. */
+/* Same dish at two sizes becomes one product with portion: true. An entry
+   listed twice under the identical name is a duplicate, not a size variant:
+   it collapses to one product without gaining a portion setting nobody
+   offered. */
 export function collapseSizeVariants(items: CompiledItem[]): CompiledItem[] {
   const order: string[] = [];
   const groups = new Map<string, CompiledItem[]>();
@@ -91,16 +99,12 @@ export function collapseSizeVariants(items: CompiledItem[]): CompiledItem[] {
 
   return order.map((key) => {
     const group = groups.get(key) ?? [];
-    const [first, ...rest] = group;
-    if (rest.length === 0) return first;
+    const first = group[0];
+    if (group.length === 1) return first;
 
-    return {
-      ...first,
-      name: stripSizeQualifier(first.name),
-      proteins: rest.reduce<string[]>((acc, p) => union(acc, p.proteins), first.proteins),
-      styles: rest.reduce<string[]>((acc, p) => union(acc, p.styles), first.styles),
-      heat: group.some((p) => p.heat),
-      portion: true,
-    };
+    const names = new Set(group.map((p) => p.name.toLowerCase()));
+    if (names.size === 1) return first;
+
+    return { ...first, name: stripSizeQualifier(first.name), portion: true };
   });
 }

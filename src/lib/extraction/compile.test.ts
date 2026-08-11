@@ -6,14 +6,15 @@ import { recommend } from "../recommend";
 import { uploadedMenu } from "../menu";
 import { MENU } from "../../data/demo-menu";
 import { validateExtraction } from "./validate";
-import { rawExtraction } from "./fixtures";
+import { rawExtraction, sourceFor } from "./fixtures";
 
 /* An extracted menu is just another universe: once validated it goes through
    the same deterministic engine the demo dataset does, with no special
    casing anywhere in entropy.ts or flow.ts. */
 
 function compiledUpload() {
-  const result = validateExtraction(rawExtraction());
+  const extraction = rawExtraction();
+  const result = validateExtraction(extraction, sourceFor(extraction));
   if (!result.ok) throw new Error(result.code);
   return uploadedMenu("menu.pdf", result.menu.items, result.menu.vocabulary);
 }

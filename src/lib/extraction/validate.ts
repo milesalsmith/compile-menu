@@ -12,8 +12,13 @@ import { collapseSizeVariants } from "./portion";
 /** A menu with fewer than this many items is not worth compiling. */
 export const MIN_ITEMS = 4;
 
+/* Evidence is a quoted line, not a licence to quote the whole document: an
+   unbounded snippet would trivially contain every name and prove nothing. */
+export const MAX_EVIDENCE_CHARS = 300;
+
 const ITEM_KEYS = [
   "name",
+  "evidence",
   "plain",
   "format",
   "proteins",
@@ -44,6 +49,12 @@ const PLACEHOLDER_NAMES = new Set([
 ]);
 
 const UNSAFE_KEY = /allerg|gluten|coeliac|celiac/i;
+
+/* Dietary status is a hard constraint on the universe, so it is only ever
+   taken from a marker the document itself prints. An ingredient list that
+   merely looks meat-free is not a claim the menu made. */
+const VEGETARIAN_MARKERS = ["vegetarian", "veggie", "meat free", "meatfree", "v"];
+const VEGAN_MARKERS = ["vegan", "plant based", "plantbased", "ve", "vg"];
 
 export type ExtractionFailure =
   | "invalid_output"
@@ -106,12 +117,31 @@ function slug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "item";
 }
 
-/* One item, checked against the declared vocabulary. Returns null when the
-   item is rejected — a model-invented attribute value or a missing name
-   removes that item rather than being coerced into something valid. */
+/* Reduce text to space-separated alphanumeric tokens, so a quotation still
+   matches across markdown table pipes, bullets and curly punctuation. Padded
+   with spaces at both ends so every containment check lands on a token
+   boundary rather than mid-word. */
+function searchable(value: string): string {
+  return ` ${value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()} `;
+}
+
+function containsToken(haystack: string, needle: string): boolean {
+  return needle.trim().length > 0 && haystack.includes(needle);
+}
+
+/* One item, checked against the declared vocabulary AND against the document
+   it claims to come from. Returns null when the item is rejected — an
+   invented attribute value, a missing name or an ungrounded claim removes
+   that item rather than being coerced into something valid.
+
+   Vocabulary closure alone would only prove the model agrees with itself:
+   it writes both the option list and the attributes it fills in. `source` is
+   the converted markdown, the one input to this step the model did not
+   write, so anything load-bearing is checked against that instead. */
 function parseItem(
   value: unknown,
-  vocabulary: Record<FilterId, QuestionOption[]>
+  vocabulary: Record<FilterId, QuestionOption[]>,
+  source: string
 ): Omit<CompiledItem, "id"> | null {
   if (!isRecord(value)) return null;
   if (Object.keys(value).some((k) => !(ITEM_KEYS as readonly string[]).includes(k))) return null;
@@ -121,6 +151,15 @@ function parseItem(
 
   const plain = text(value.plain);
   if (plain === null || plain.toLowerCase() === name.toLowerCase()) return null;
+
+  /* The quoted passage must really be in the document, and the item's name
+     must really be in the quoted passage. Names are verbatim or the item
+     doesn't ship. */
+  const evidence = text(value.evidence);
+  if (evidence === null || evidence.length > MAX_EVIDENCE_CHARS) return null;
+  const quoted = searchable(evidence);
+  if (!containsToken(source, quoted)) return null;
+  if (!containsToken(quoted, searchable(name))) return null;
 
   const known = (slot: FilterId) => new Set(vocabulary[slot].map((o) => o.id));
 
@@ -148,6 +187,13 @@ function parseItem(
   const vegetarian = value.vegetarian as boolean;
   const vegan = value.vegan as boolean;
   if (vegan && !vegetarian) return null;
+
+  /* A dietary claim the document didn't make is dropped rather than
+     downgraded: the veg protein id and the vegetarian flag have to stay in
+     step, so a half-corrected item is not a coherent item. */
+  const marked = (markers: string[]) => markers.some((m) => containsToken(quoted, ` ${m} `));
+  if (vegetarian && !marked([...VEGETARIAN_MARKERS, ...VEGAN_MARKERS])) return null;
+  if (vegan && !marked(VEGAN_MARKERS)) return null;
 
   /* subpool()'s veg branch assumes vegetarian items carry exactly ["veg"]
      and meat items never do (rule 010-engine.mdc, "Vocabulary"). */
@@ -197,7 +243,8 @@ function pruneVocabulary(
   };
 }
 
-export function validateExtraction(raw: unknown): ValidationResult {
+/** `source` is the converted markdown every extracted item is checked against. */
+export function validateExtraction(raw: unknown, source: string): ValidationResult {
   if (!isRecord(raw)) return { ok: false, code: "invalid_output" };
 
   /* Safety-critical fields are never inferred. If the model volunteered one,
@@ -210,8 +257,9 @@ export function validateExtraction(raw: unknown): ValidationResult {
   const parsedVocabulary = parseVocabulary(raw.vocabulary);
   if (!parsedVocabulary || !Array.isArray(raw.items)) return { ok: false, code: "invalid_output" };
 
+  const document = searchable(source);
   const parsed = raw.items
-    .map((entry) => parseItem(entry, parsedVocabulary))
+    .map((entry) => parseItem(entry, parsedVocabulary, document))
     .filter((item): item is Omit<CompiledItem, "id"> => item !== null);
 
   const items = collapseSizeVariants(withIds(parsed));

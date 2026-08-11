@@ -19,6 +19,9 @@ const item = {
   type: "object",
   properties: {
     name: { type: "string" },
+    /* The line this item was read from, copied out of the document. Checked
+       against the converted markdown so the model cannot vouch for itself. */
+    evidence: { type: "string" },
     plain: { type: "string" },
     format: { type: "string" },
     proteins: { type: "array", items: { type: "string" } },
@@ -30,6 +33,7 @@ const item = {
   },
   required: [
     "name",
+    "evidence",
     "plain",
     "format",
     "proteins",
@@ -69,12 +73,13 @@ Rules:
 1. First list the option values for each dimension in "vocabulary". Use short lowercase ids (a-z and hyphens), a human label, and a very short note. Prefer 2 to 6 options per dimension. Every option must apply to at least one item.
 2. Every item's format, proteins and styles must use ids you declared in the vocabulary. Never use an id you did not declare.
 3. "name" must be the item's name copied exactly as printed on the menu. Never paraphrase, translate, tidy or invent a name. If an item has no discernible name, omit that item entirely.
-4. "plain" is one sentence describing what the item actually is, by its components. Do not repeat the item's name inside it and do not use a brand name.
-5. Sizes are not separate products. If the menu lists the same dish as single/double, small/large or regular/large, output ONE item with "portion": true and the base name without the size word. Never output two near-identical items that differ only by size.
-6. "heat" is true only when the menu lets the customer choose a spice level for that item.
-7. "vegetarian" items must use the protein id "veg" and nothing else. "vegan" implies "vegetarian".
-8. Include main dishes only. Skip drinks, desserts, sides, sauces and extras.
-9. Never output allergen, gluten-free or any other safety information, in any field.
+4. "evidence" must be a single short passage copied character-for-character from the document, no longer than one or two lines, that contains that item's name. Copy it; never write your own sentence. Every item's evidence is checked against the document, and an item whose name does not appear inside its own evidence is discarded.
+5. "plain" is one sentence describing what the item actually is, by its components. Do not repeat the item's name inside it and do not use a brand name.
+6. Sizes are not separate products. If the menu lists the same dish as single/double, small/large or regular/large, output ONE item with "portion": true and the base name without the size word. Never output two near-identical items that differ only by size.
+7. "heat" is true only when the menu lets the customer choose a spice level for that item.
+8. "vegetarian" and "vegan" are only true when the document itself says so for that item — a "(V)", "(VE)", "vegetarian" or "vegan" marker in its evidence. Never infer either one from the ingredients, and never guess. If the menu does not say, both are false. A vegetarian item must use the protein id "veg" and nothing else, and "vegan" implies "vegetarian".
+9. Include main dishes only. Skip drinks, desserts, sides, sauces and extras.
+10. Never output allergen, gluten-free or any other safety information, in any field.
 
 Return only the structured object.`;
 

@@ -1,21 +1,33 @@
 import { describe, expect, it, vi } from "vitest";
 import type { MenuAiPort, UploadedFile } from "./pipeline";
-import { MAX_UPLOAD_BYTES, extractMenu } from "./pipeline";
-import { rawExtraction } from "./fixtures";
+import { MAX_MARKDOWN_CHARS, MAX_UPLOAD_BYTES, extractMenu } from "./pipeline";
+import { rawExtraction, sourceFor } from "./fixtures";
+
+const SOURCE = sourceFor(rawExtraction());
+
+function bytesOf(content: string): ArrayBuffer {
+  return new TextEncoder().encode(content).buffer as ArrayBuffer;
+}
+
+const REAL_PDF = bytesOf("%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\ntrailer\n%%EOF\n");
 
 function pdf(overrides: Partial<UploadedFile> = {}): UploadedFile {
   return {
     name: "menu.pdf",
     type: "application/pdf",
-    size: 2048,
-    bytes: async () => new ArrayBuffer(2048),
+    size: REAL_PDF.byteLength,
+    bytes: async () => REAL_PDF,
     ...overrides,
   };
 }
 
 function port(overrides: Partial<MenuAiPort> = {}): MenuAiPort {
   return {
-    toMarkdown: vi.fn(async () => ({ ok: true as const, markdown: "# Menu\n\nPizza 9.50" })),
+    toMarkdown: vi.fn(async () => ({
+      ok: true as const,
+      markdown: SOURCE,
+      mimeType: "application/pdf",
+    })),
     extractJson: vi.fn(async () => ({ ok: true as const, value: rawExtraction() })),
     ...overrides,
   };
@@ -26,6 +38,17 @@ describe("upload gates — checked before any AI call", () => {
     const ai = port();
     const result = await extractMenu(pdf({ type: "image/png" }), ai);
     expect(result).toMatchObject({ ok: false, code: "unsupported_file_type", status: 415 });
+    expect(ai.toMarkdown).not.toHaveBeenCalled();
+  });
+
+  it("treats the browser's content type as a claim and checks the bytes", async () => {
+    const ai = port();
+    const disguised = bytesOf("GIF89a this is not a pdf at all");
+    const result = await extractMenu(
+      pdf({ name: "menu.pdf", size: disguised.byteLength, bytes: async () => disguised }),
+      ai
+    );
+    expect(result).toMatchObject({ ok: false, code: "not_a_pdf", status: 415 });
     expect(ai.toMarkdown).not.toHaveBeenCalled();
   });
 
@@ -54,9 +77,31 @@ describe("conversion and model failures each surface as themselves", () => {
   });
 
   it("treats a PDF that converts to nothing as unreadable", async () => {
-    const ai = port({ toMarkdown: async () => ({ ok: true, markdown: "   \n  " }) });
+    const ai = port({
+      toMarkdown: async () => ({ ok: true, markdown: "   \n  ", mimeType: "application/pdf" }),
+    });
     const result = await extractMenu(pdf(), ai);
     expect(result).toMatchObject({ ok: false, code: "conversion_failed" });
+  });
+
+  it("stops when the converter detects something other than a PDF", async () => {
+    const ai = port({
+      toMarkdown: async () => ({ ok: true, markdown: SOURCE, mimeType: "text/html" }),
+    });
+    const result = await extractMenu(pdf(), ai);
+    expect(result).toMatchObject({ ok: false, code: "not_a_pdf" });
+    expect(ai.extractJson).not.toHaveBeenCalled();
+  });
+
+  it("accepts a detected type that carries parameters", async () => {
+    const ai = port({
+      toMarkdown: async () => ({
+        ok: true,
+        markdown: SOURCE,
+        mimeType: "application/pdf; charset=binary",
+      }),
+    });
+    expect((await extractMenu(pdf(), ai)).ok).toBe(true);
   });
 
   it("reports an unavailable AI service", async () => {
@@ -97,16 +142,30 @@ describe("a valid upload compiles", () => {
     ]);
   });
 
-  it("caps how much converted text reaches the model", async () => {
+  it("sends the whole converted document to the model, unabridged", async () => {
     let sent = "";
     const ai = port({
-      toMarkdown: async () => ({ ok: true, markdown: "x".repeat(120_000) }),
       extractJson: async (markdown) => {
         sent = markdown;
         return { ok: true, value: rawExtraction() };
       },
     });
     await extractMenu(pdf(), ai);
-    expect(sent.length).toBe(50_000);
+    expect(sent).toBe(SOURCE.trim());
+  });
+
+  it("refuses a document past the reliable ceiling rather than reading part of it", async () => {
+    const ai = port({
+      toMarkdown: async () => ({
+        ok: true,
+        markdown: "x".repeat(MAX_MARKDOWN_CHARS + 1),
+        mimeType: "application/pdf",
+      }),
+    });
+    const result = await extractMenu(pdf(), ai);
+    /* Compiling the first 50k characters and presenting it as the menu would
+       be a quietly wrong answer, which is worse than a refusal. */
+    expect(result).toMatchObject({ ok: false, code: "menu_too_long", status: 413 });
+    expect(ai.extractJson).not.toHaveBeenCalled();
   });
 });
