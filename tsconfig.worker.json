@@ -3,6 +3,10 @@
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.worker.tsbuildinfo",
     "types": ["./worker-configuration.d.ts", "vite/client"],
+    /* The Worker is bundled by the Cloudflare Vite plugin, not run by Node,
+       so it resolves imports the way a bundler does. */
+    "module": "esnext",
+    "moduleResolution": "bundler",
   },
   "include": ["worker"]
 }

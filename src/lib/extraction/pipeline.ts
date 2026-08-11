@@ -15,12 +15,13 @@ export interface UploadedFile {
   name: string;
   type: string;
   size: number;
-  bytes: ArrayBuffer;
+  /** Read lazily, so a rejected upload is never pulled into memory. */
+  bytes(): Promise<ArrayBuffer>;
 }
 
 export type ConversionOutcome =
   | { ok: true; markdown: string }
-  | { ok: false; reason: "conversion_failed" };
+  | { ok: false; reason: "conversion_failed" | "ai_unavailable" };
 
 export type ModelOutcome =
   | { ok: true; value: unknown }
@@ -88,10 +89,8 @@ function fail(code: ExtractionErrorCode): ExtractionOutcome {
 
 export async function extractMenu(file: UploadedFile, ai: MenuAiPort): Promise<ExtractionOutcome> {
   if (file.type !== PDF_MIME) return fail("unsupported_file_type");
-  if (file.size > MAX_UPLOAD_BYTES || file.bytes.byteLength > MAX_UPLOAD_BYTES) {
-    return fail("file_too_large");
-  }
-  if (file.size === 0 || file.bytes.byteLength === 0) return fail("empty_file");
+  if (file.size > MAX_UPLOAD_BYTES) return fail("file_too_large");
+  if (file.size === 0) return fail("empty_file");
 
   const converted = await ai.toMarkdown(file);
   if (!converted.ok) return fail(converted.reason);

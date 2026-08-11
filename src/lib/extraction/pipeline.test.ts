@@ -8,7 +8,7 @@ function pdf(overrides: Partial<UploadedFile> = {}): UploadedFile {
     name: "menu.pdf",
     type: "application/pdf",
     size: 2048,
-    bytes: new ArrayBuffer(2048),
+    bytes: async () => new ArrayBuffer(2048),
     ...overrides,
   };
 }
@@ -29,17 +29,18 @@ describe("upload gates — checked before any AI call", () => {
     expect(ai.toMarkdown).not.toHaveBeenCalled();
   });
 
-  it("rejects an oversized upload without spending an AI call", async () => {
+  it("rejects an oversized upload without reading it or spending an AI call", async () => {
     const ai = port();
-    const size = MAX_UPLOAD_BYTES + 1;
-    const result = await extractMenu(pdf({ size, bytes: new ArrayBuffer(8) }), ai);
+    const bytes = vi.fn(async () => new ArrayBuffer(8));
+    const result = await extractMenu(pdf({ size: MAX_UPLOAD_BYTES + 1, bytes }), ai);
     expect(result).toMatchObject({ ok: false, code: "file_too_large", status: 413 });
     expect(ai.toMarkdown).not.toHaveBeenCalled();
+    expect(bytes).not.toHaveBeenCalled();
   });
 
   it("rejects an empty file", async () => {
     const ai = port();
-    const result = await extractMenu(pdf({ size: 0, bytes: new ArrayBuffer(0) }), ai);
+    const result = await extractMenu(pdf({ size: 0 }), ai);
     expect(result).toMatchObject({ ok: false, code: "empty_file" });
     expect(ai.toMarkdown).not.toHaveBeenCalled();
   });
