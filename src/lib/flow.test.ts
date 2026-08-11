@@ -4,20 +4,14 @@ import { FILTER_OPTIONS, subpool } from "./entropy";
 import { nextQuestion } from "./flow";
 import type { Answers, MenuItem } from "./types";
 
-/* Exhaustive path simulation — locks in the "Verified numbers" from
-   .cursor/rules/010-engine.mdc:
-     "ASK_COST fires on exactly 2 of 23 terminal paths (wrap→breast,
-      bowl→breast, where style is worth ~0.33 bits). Survivor distribution:
-      {1: 15, 2: 5, 3: 3}."
+/* Exhaustive path simulation — locks in the verified numbers from
+   .cursor/rules/010-engine.mdc after the portion-as-config dataset change:
+     ASK_COST fires on exactly 1 of 23 terminal paths (bowl→breast, where
+     style is worth ~0.33 bits). Survivor distribution: {1: 17, 2: 4, 3: 2}.
 
-   This walks every reachable sequence of filter answers (branching only on
-   non-empty option branches, exactly as the UI prunes zero-count options
-   before render) by repeatedly asking `nextQuestion` — the actual production
-   selection logic — until it stops returning a filter question (format,
-   protein, or style). Each such stopping point is one "terminal identify
-   path": the point where IDENTIFY ends and CONFIGURE begins, whether
-   because the pool resolved to one item, every filter dimension is
-   answered, or the best remaining gain doesn't clear ASK_COST. */
+   wrap→breast no longer trips ASK_COST: collapsing single/double wrap into
+   one portion-configurable product leaves a single survivor, so style is
+   zero-gain rather than below-cost. */
 
 interface TerminalPath {
   survivors: number;
@@ -34,14 +28,12 @@ function walkIdentifyPaths(pool: MenuItem[], answers: Answers, leaves: TerminalP
   if (isFilterId(state.currentId)) {
     for (const oid of FILTER_OPTIONS[state.currentId]) {
       const sub = subpool(pool, state.currentId, oid);
-      if (sub.length === 0) continue; // zero-count options are pruned before render
+      if (sub.length === 0) continue;
       walkIdentifyPaths(sub, { ...answers, [state.currentId]: oid }, leaves);
     }
     return;
   }
 
-  // Terminal: nextQuestion is asking heat/side, or is fully done. IDENTIFY
-  // ended here — record the survivor count and whether ASK_COST is why.
   const askCostFired = state.exhausted.some((x) => x.reason === "below_ask_cost");
   leaves.push({ survivors: pool.length, askCostFired });
 }
@@ -59,25 +51,26 @@ describe("exhaustive terminal-path simulation (010-engine.mdc verified numbers)"
     expect(leaves.length).toBe(23);
   });
 
-  it("ASK_COST fires on exactly 2 of the 23 terminal paths", () => {
+  it("ASK_COST fires on exactly 1 of the 23 terminal paths", () => {
     const fired = leaves.filter((l) => l.askCostFired);
-    expect(fired.length).toBe(2);
+    expect(fired.length).toBe(1);
   });
 
   it("worst-case survivors after all filter answers is 3", () => {
     expect(Math.max(...leaves.map((l) => l.survivors))).toBe(3);
   });
 
-  it("survivor distribution across all 23 paths is {1: 15, 2: 5, 3: 3}", () => {
+  it("survivor distribution across all 23 paths is {1: 17, 2: 4, 3: 2}", () => {
     const distribution: Record<number, number> = {};
     for (const leaf of leaves) {
       distribution[leaf.survivors] = (distribution[leaf.survivors] ?? 0) + 1;
     }
-    expect(distribution).toEqual({ 1: 15, 2: 5, 3: 3 });
+    expect(distribution).toEqual({ 1: 17, 2: 4, 3: 2 });
   });
 
-  it("both ASK_COST-fired paths land on a 2-survivor pool with ~0.33 bits of unused style gain", () => {
+  it("the ASK_COST-fired path lands on a 2-survivor pool (bowl→breast)", () => {
     const fired = leaves.filter((l) => l.askCostFired);
-    expect(fired.every((l) => l.survivors === 2)).toBe(true);
+    expect(fired).toHaveLength(1);
+    expect(fired[0].survivors).toBe(2);
   });
 });

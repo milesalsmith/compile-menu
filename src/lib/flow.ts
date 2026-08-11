@@ -12,9 +12,9 @@ function isFilterQuestion(qid: QuestionId): qid is FilterQuestionId {
   return (FILTER_QUESTION_IDS as readonly QuestionId[]).includes(qid);
 }
 
-/* Apply each answered FILTER question's subpool in turn. Heat/side answers
-   are present in `answers` too but never narrow the pool — subpool()
-   already no-ops for them, this guard just skips the call entirely. */
+/* Apply each answered FILTER question's subpool in turn. Config answers
+   (heat/portion/side) are present in `answers` too but never narrow the
+   pool — subpool() already no-ops for them; this guard skips the call. */
 export function filterProducts(answers: Answers, universe: MenuItem[]): MenuItem[] {
   let pool = universe;
   for (const [qid, oid] of Object.entries(answers)) {
@@ -34,7 +34,7 @@ export interface QuestionGain {
      (e.g. every survivor shares the same style) — the math resolved it.
    - "below_ask_cost": there IS gain, but it doesn't clear ASK_COST — the tap
      isn't worth it.
-   - "not_applicable": heat only, when no remaining item is heat-configurable. */
+   - "not_applicable": heat/portion, when no remaining item is configurable. */
 export type ExhaustReason = "zero_gain" | "below_ask_cost" | "not_applicable";
 
 export interface ExhaustedQuestion {
@@ -44,20 +44,18 @@ export interface ExhaustedQuestion {
 }
 
 function exhaustReason(qid: QuestionId, g: number): ExhaustReason {
-  if (qid === "heat") return "not_applicable";
+  if (qid === "heat" || qid === "portion") return "not_applicable";
   return g <= 1e-9 ? "zero_gain" : "below_ask_cost";
 }
 
 export type Phase = "identify" | "configure";
 
-/* Mirrors the reference's `phase = flow.current?.kind === "config" ?
-   "configure" : "identify"` exactly, including for `current === null`
-   (where the reference's optional-chain also evaluates to "identify" — that
-   state is dead in the UI, since it immediately routes to the results
-   screen, but this keeps the derivation identical rather than inventing a
-   third value). */
+function isConfigQuestion(qid: QuestionId | null): boolean {
+  return qid === "heat" || qid === "portion" || qid === "side";
+}
+
 function phaseFor(current: QuestionId | null): Phase {
-  return current === "heat" || current === "side" ? "configure" : "identify";
+  return isConfigQuestion(current) ? "configure" : "identify";
 }
 
 export interface FlowState {
@@ -71,10 +69,9 @@ export interface FlowState {
 }
 
 /* Next-question selection. Argmax-gain unanswered filter question if its
-   gain clears ASK_COST; else heat (only if a survivor still has heat), then
-   side, then done. Ports the reference's `flow` useMemo exactly, including
-   the "heat wasn't applicable" backfill into `exhausted` when we fall
-   through straight to side. */
+   gain clears ASK_COST; else heat (if applicable), then portion (if any
+   survivor is portion-configurable), then side, then done. Config
+   not-applicable backfills into `exhausted` when we skip past them. */
 export function nextQuestion(answers: Answers, pool: MenuItem[]): FlowState {
   const gains: QuestionGain[] = FILTER_QUESTION_IDS.filter((qid) => answers[qid] === undefined)
     .map((qid) => ({ qid, gain: gain(qid, pool) }))
@@ -93,11 +90,23 @@ export function nextQuestion(answers: Answers, pool: MenuItem[]): FlowState {
     return { currentId: "heat", phase: phaseFor("heat"), gains, exhausted };
   }
 
-  if (answers.side === undefined) {
-    const finalExhausted: ExhaustedQuestion[] =
+  const portionApplies = pool.some((p) => p.portion);
+  if (answers.portion === undefined && portionApplies) {
+    const withHeat: ExhaustedQuestion[] =
       answers.heat === undefined && !heatApplies
         ? [...exhausted, { qid: "heat", gain: 0, reason: "not_applicable" }]
         : exhausted;
+    return { currentId: "portion", phase: phaseFor("portion"), gains, exhausted: withHeat };
+  }
+
+  if (answers.side === undefined) {
+    let finalExhausted = exhausted;
+    if (answers.heat === undefined && !heatApplies) {
+      finalExhausted = [...finalExhausted, { qid: "heat", gain: 0, reason: "not_applicable" }];
+    }
+    if (answers.portion === undefined && !portionApplies) {
+      finalExhausted = [...finalExhausted, { qid: "portion", gain: 0, reason: "not_applicable" }];
+    }
     return { currentId: "side", phase: phaseFor("side"), gains, exhausted: finalExhausted };
   }
 
