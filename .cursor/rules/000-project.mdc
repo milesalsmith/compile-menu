@@ -33,9 +33,20 @@ recovers the decisions hiding under the products.
    flow — they shrink the universe and never enter the gain ranking.
 5. Allergens / gluten-free are OUT. Never add an allergen field to any schema,
    never let the LLM infer safety-critical data. This exclusion is deliberate.
-6. NO real branded product names anywhere — dataset, UI, or extraction output.
-   Items are described generically by their components. Do not add a
-   "(on menu as X)" mapping. This is a hard rule, not a stylistic preference.
+6. Branded names: two different postures, by provenance.
+   a. The SHIPPED DEMO DATASET stays generic. Items are described by their
+      components, no branded product names, no "(on menu as X)" mapping.
+      Do not rename demo items. This remains a hard rule.
+   b. USER-UPLOADED MENUS preserve the item's real name verbatim. The user
+      supplied the document; we process it on their behalf, in memory, for
+      one session. Nothing is persisted, nothing is hosted by us, and we
+      publish no branded directory. That is a different posture from a
+      permanently hosted branded dataset, not an exception to it.
+      Each uploaded item carries BOTH: `name` (verbatim from the source,
+      never paraphrased or invented) and `plain` (one sentence describing
+      the components, no branded name). The engine decides on components;
+      the order card shows the real name as headline with `plain` beneath.
+      If no name is discernible, reject the item — never invent one.
 7. Deterministic engine + one fenced probabilistic step (extraction). Never
    blur this boundary. The recommendation logic is always deterministic.
 8. No expert / "I know what I want" bypass path — it contradicts the product.

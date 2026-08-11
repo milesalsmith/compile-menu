@@ -1,5 +1,5 @@
 ---
-description: Cloudflare Worker routing and the Anthropic extraction endpoint
+description: Cloudflare Worker routing and the Workers AI extraction endpoint
 globs: ["worker/**/*.ts", "wrangler.jsonc", "vite.config.ts"]
 alwaysApply: false
 ---
@@ -13,19 +13,26 @@ alwaysApply: false
 - SPA fallback: `not_found_handling: "single-page-application"`.
 
 ## Extraction endpoint (`POST /api/extract`)
-- Reads `{ menuText: string }`, cap length (~50k chars).
-- Model: `claude-haiku-4-5-20251001` (fast, cheap, scoped — NOT Opus).
-- Endpoint `https://api.anthropic.com/v1/messages`, headers `x-api-key`,
-  `anthropic-version: 2023-06-01`, `content-type: application/json`.
-- API key from `env.ANTHROPIC_API_KEY` — a Wrangler SECRET. Never in the repo,
-  never sent to the client, never logged.
-- System prompt must demand a JSON array only (no prose, no markdown fences).
-  Parse defensively: strip accidental fences, JSON.parse in try/catch.
-- The extraction schema must describe each item by COMPONENTS with NO branded
-  product name, and must NOT include any allergen/gluten-free field. The
-  "no branded name" instruction is the product working, not a disclaimer.
-- Validate every returned element against the MenuItem type; drop malformed
-  entries; require >= 4 valid items or show a friendly error.
+- Cloudflare-native. No third-party AI provider, no API-key secret.
+- Accepts `multipart/form-data` with one PDF. Validate MIME type is
+  `application/pdf` and enforce a size cap (8 MB) BEFORE any AI call.
+- Conversion: `env.AI.toMarkdown({ name, blob }, { conversionOptions:
+  { pdf: { metadata: false } } })`. Metadata is token noise for extraction.
+  A `ConversionResult` with `format === "error"` is a user-facing failure.
+- Cap converted markdown (~50k chars) before it reaches the model.
+- Extraction model: Workers AI text model supporting JSON Mode, pinned in a
+  single constant so it can be swapped. Request structured output via
+  `response_format: { type: "json_schema", json_schema: {...} }`.
+- Workers AI does NOT guarantee schema compliance; it returns an explicit
+  `JSON Mode couldn't be met` error. Handle it as its own failure mode.
+- The AI binding is `AI` in wrangler.jsonc (`"ai": { "binding": "AI" }`).
+- Provider concerns live behind one port interface so the model can change.
+- Extraction output uses per-menu vocabulary; never coerce into the demo
+  enums. It must NOT include any allergen/gluten-free field, ever.
+- Validate deterministically. Reject invalid or model-invented output;
+  never silently repair. Require >= 4 valid items AND enough attribute
+  variety that at least one filter question clears ASK_COST.
+- Never log, persist, or write to disk any uploaded file or derived content.
 - The engine that consumes the result stays deterministic. Extraction is the
   only probabilistic step in the whole app.
 

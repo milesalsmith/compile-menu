@@ -40,6 +40,16 @@ the change is wrong, not the number.
 - ASK_COST fires on exactly 1 of 23 terminal paths (bowl→breast, where style
   is worth ~0.33 bits). Survivor distribution: {1: 17, 2: 4, 3: 2}.
 
+## Vocabulary
+- The three filter SLOTS (format, protein, style) are fixed. Their OPTION
+  VALUES are per-menu: the demo dataset uses FILTER_OPTIONS, an uploaded
+  menu supplies its own. Engine functions take the option set as an
+  optional trailing argument defaulting to the demo vocabulary, so the
+  demo path and every verified number above are unchanged.
+- Uploaded menus have no sides question (we never invent menu content) and
+  vegetarian items must carry proteins: ["veg"], the invariant subpool's
+  veg branch already assumes.
+
 ## Rules
 - Tie-breaks (when survivors are identical on every asked dimension) are
   disclosed AS tie-breaks in the UI, never presented as the engine.
