@@ -1,4 +1,6 @@
 import type { CompiledItem, FilterId, FilterOptions, Question, QuestionOption } from "./types";
+import type { MenuVocabulary } from "./vocabulary";
+import { filterOptionsOf } from "./vocabulary";
 import { FILTER_OPTIONS } from "./entropy";
 import { MENU } from "../data/demo-menu";
 import { QUESTIONS, UPLOAD_HEAT } from "../data/config";
@@ -10,15 +12,8 @@ import { QUESTIONS, UPLOAD_HEAT } from "../data/config";
    here touches the entropy math — it only tells the engine which option ids
    exist and gives the UI something to render (rule 010-engine.mdc). */
 
-export interface MenuVocabulary {
-  format: QuestionOption[];
-  protein: QuestionOption[];
-  style: QuestionOption[];
-  /** Uploaded menus have no sides question — we never invent menu content. */
-  hasSides: boolean;
-  /** How many spice levels the settings step offers, for stats only. */
-  heatLevels: number;
-}
+export type { MenuVocabulary };
+export { filterOptionsOf };
 
 export interface CompiledMenu {
   source: "demo" | "upload";
@@ -31,14 +26,6 @@ export interface CompiledMenu {
 }
 
 const FILTER_IDS: readonly FilterId[] = ["format", "protein", "style"];
-
-export function filterOptionsOf(vocabulary: MenuVocabulary): FilterOptions {
-  return {
-    format: vocabulary.format.map((o) => o.id),
-    protein: vocabulary.protein.map((o) => o.id),
-    style: vocabulary.style.map((o) => o.id),
-  };
-}
 
 /* Prompts for uploaded menus are deliberately domain-neutral; only the option
    labels come from the menu itself. */
@@ -116,12 +103,19 @@ export function uploadedMenu(
   items: CompiledItem[],
   vocabulary: MenuVocabulary
 ): CompiledMenu {
+  /* The settings step is app-authored, so its shape is decided here rather
+     than by the extraction: a neutral spice scale, and never any sides. */
+  const resolved: MenuVocabulary = {
+    ...vocabulary,
+    hasSides: false,
+    heatLevels: UPLOAD_HEAT.length,
+  };
   return {
     source: "upload",
     label,
     items,
-    vocabulary,
-    questions: buildQuestions(vocabulary),
-    filterOptions: filterOptionsOf(vocabulary),
+    vocabulary: resolved,
+    questions: buildQuestions(resolved),
+    filterOptions: filterOptionsOf(resolved),
   };
 }
