@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { T } from "../theme";
-import type { Answers, MenuItem } from "../lib/types";
+import type { Answers, CompiledItem, FilterOptions, Question } from "../lib/types";
 import type { EntropyTraceRow } from "../lib/flow";
 import type { RecommendResult } from "../lib/recommend";
 import type { Stats } from "../lib/stats";
@@ -12,13 +12,21 @@ interface ResultsProps {
   answers: Answers;
   heatMeta?: HeatLevel;
   portionLabel: string | null;
+  /** Overrides the demo's cut copy when the menu came from an upload. */
+  portionNote?: string | null;
+  proteinLabel?: string | null;
   sideNames: string[] | null;
   identifyCount: number;
   configDone: number;
   diet: string;
   stats: Stats;
-  pool: MenuItem[];
+  pool: CompiledItem[];
   trace: EntropyTraceRow[];
+  questions: Question[];
+  filterOptions: FilterOptions;
+  hasSides: boolean;
+  /** Menu size before the dietary constraint is applied. */
+  total: number;
   showWork: boolean;
   onShowWork: () => void;
   onRestart: () => void;
@@ -29,6 +37,8 @@ export default function Results({
   answers,
   heatMeta,
   portionLabel,
+  portionNote,
+  proteinLabel,
   sideNames,
   identifyCount,
   configDone,
@@ -36,6 +46,10 @@ export default function Results({
   stats,
   pool,
   trace,
+  questions,
+  filterOptions,
+  hasSides,
+  total,
   showWork,
   onShowWork,
   onRestart,
@@ -44,13 +58,7 @@ export default function Results({
     ? "Plant-based"
     : result.pick.vegetarian
       ? "Vegetarian"
-      : answers.protein === "thigh"
-        ? "Chicken thighs"
-        : answers.protein === "wings"
-          ? "Wings"
-          : answers.protein === "breast"
-            ? "Chicken breast"
-            : "Chef's choice of cut";
+      : (proteinLabel ?? "Chef's choice of cut");
 
   const stat: [ReactNode, string][] = [
     [stats.products, "products in universe"],
@@ -133,7 +141,7 @@ export default function Results({
             <span style={{ fontWeight: 600 }}>Portion: {portionLabel}</span>
             <span style={{ color: T.dim }}>
               {" "}
-              — {portionLabel === "Double" ? "two breasts" : "one breast"}
+              — {portionNote ?? (portionLabel === "Double" ? "two breasts" : "one breast")}
             </span>
           </p>
         ) : (
@@ -234,6 +242,10 @@ export default function Results({
           trace={trace}
           answers={answers}
           result={result}
+          questions={questions}
+          filterOptions={filterOptions}
+          hasSides={hasSides}
+          total={total}
         />
       )}
 

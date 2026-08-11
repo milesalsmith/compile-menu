@@ -1,5 +1,4 @@
-import type { Answers, MenuItem } from "./types";
-import { MENU } from "../data/demo-menu";
+import type { Answers, CompiledItem } from "./types";
 import { filterProducts } from "./flow";
 
 /* ---------- RECOMMEND (tie-break + pick/alt) & SIDES ---------- */
@@ -10,23 +9,28 @@ import { filterProducts } from "./flow";
    only ever runs on survivors that are already identical on every asked
    dimension (0 bits of remaining gain), so it can't override the entropy
    ranking; it just needs to pick deterministically among ties. */
-export function tieBreak(p: MenuItem, answers: Answers): number {
+export function tieBreak(p: CompiledItem, answers: Answers): number {
   let t = 0;
   if (answers.protein && answers.protein !== "veg" && p.proteins.length === 1) t += 1;
   if (answers.style) t += p.styles.filter((s) => s === answers.style).length;
   return t;
 }
 
-export interface RecommendResult {
-  pick: MenuItem;
-  alt: MenuItem | undefined;
-  ranked: MenuItem[];
+export interface RecommendResult<T extends CompiledItem = CompiledItem> {
+  pick: T;
+  alt: T | undefined;
+  ranked: T[];
 }
 
-export function recommend(answers: Answers, universe: MenuItem[]): RecommendResult {
+/* Callers always pass a non-empty universe: dietFilter never empties the demo
+   menu, and extraction rejects any menu under four items. */
+export function recommend<T extends CompiledItem>(
+  answers: Answers,
+  universe: T[]
+): RecommendResult<T> {
   const pool = filterProducts(answers, universe);
   const ranked = [...pool].sort((a, b) => tieBreak(b, answers) - tieBreak(a, answers));
-  const pick = ranked[0] || universe[0] || MENU[0];
+  const pick = ranked[0] || universe[0];
   const alt = ranked[1] || universe.find((p) => p.id !== pick.id);
   return { pick, alt, ranked: ranked.length ? ranked : [pick] };
 }

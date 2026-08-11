@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { T } from "../theme";
-import type { MenuItem } from "../lib/types";
-import { ASK_COST, gain } from "../lib/entropy";
+import type { CompiledItem, FilterOptions } from "../lib/types";
+import { ASK_COST, FILTER_QUESTION_IDS, gain } from "../lib/entropy";
 import type { Stats } from "../lib/stats";
-import { MENU } from "../data/demo-menu";
-import { QUESTIONS } from "../data/config";
 
 /* The four-stage READ / TOKENIZE / MEASURE / BUILD decompile animation.
    Ported from menu-compiler.jsx (buildLog + the compile-screen effect and
@@ -23,10 +21,17 @@ interface LogLine {
 
 const sp = (t: string, c: string | null): Span => ({ t, c });
 
-function buildLog(universe: MenuItem[], diet: string, st: Stats): LogLine[] {
-  const gains = QUESTIONS.filter((q) => q.kind === "filter")
-    .map((q) => ({ id: q.id, g: gain(q.id, universe) }))
-    .sort((a, b) => b.g - a.g);
+function buildLog(
+  universe: CompiledItem[],
+  diet: string,
+  st: Stats,
+  total: number,
+  filterOptions: FilterOptions,
+  hasSides: boolean
+): LogLine[] {
+  const gains = FILTER_QUESTION_IDS.map((id) => ({ id, g: gain(id, universe, filterOptions) })).sort(
+    (a, b) => b.g - a.g
+  );
   const live = gains.filter((x) => x.g > ASK_COST);
   const dead = gains.filter((x) => x.g <= ASK_COST);
   const ex = universe[1] || universe[0];
@@ -34,7 +39,7 @@ function buildLog(universe: MenuItem[], diet: string, st: Stats): LogLine[] {
   const gap: LogLine = { d: 220, spans: [sp(" ", null)] };
   return [
     { d: 450, spans: stage(1, "READ") },
-    { d: 500, spans: [sp("      ", null), sp(`${MENU.length} products on the menu`, T.dim)] },
+    { d: 500, spans: [sp("      ", null), sp(`${total} products on the menu`, T.dim)] },
     ...(diet !== "all"
       ? [
           {
@@ -42,7 +47,7 @@ function buildLog(universe: MenuItem[], diet: string, st: Stats): LogLine[] {
             spans: [
               sp("      ", null),
               sp(`constraint "${diet}": `, T.dim),
-              sp(`${MENU.length} → ${universe.length} products`, T.chili),
+              sp(`${total} → ${universe.length} products`, T.chili),
             ],
           },
         ]
@@ -103,33 +108,45 @@ function buildLog(universe: MenuItem[], diet: string, st: Stats): LogLine[] {
         ],
       })
     ),
-    {
-      d: 430,
-      spans: [
-        sp("        ", null),
-        sp("spice   ", T.text),
-        sp("0.00 bits", T.chili),
-        sp("  ✗ a setting, not a product", T.faint),
-      ],
-    },
-    {
-      d: 430,
-      spans: [
-        sp("        ", null),
-        sp("portion ", T.text),
-        sp("0.00 bits", T.chili),
-        sp("  ✗ single vs double — appetite, not identity", T.faint),
-      ],
-    },
-    {
-      d: 430,
-      spans: [
-        sp("        ", null),
-        sp("sides   ", T.text),
-        sp("0.00 bits", T.chili),
-        sp("  ✗ same on every main", T.faint),
-      ],
-    },
+    ...(universe.some((p) => p.heat)
+      ? [
+          {
+            d: 430,
+            spans: [
+              sp("        ", null),
+              sp("spice   ", T.text),
+              sp("0.00 bits", T.chili),
+              sp("  ✗ a setting, not a product", T.faint),
+            ],
+          },
+        ]
+      : []),
+    ...(universe.some((p) => p.portion)
+      ? [
+          {
+            d: 430,
+            spans: [
+              sp("        ", null),
+              sp("portion ", T.text),
+              sp("0.00 bits", T.chili),
+              sp("  ✗ single vs double — appetite, not identity", T.faint),
+            ],
+          },
+        ]
+      : []),
+    ...(hasSides
+      ? [
+          {
+            d: 430,
+            spans: [
+              sp("        ", null),
+              sp("sides   ", T.text),
+              sp("0.00 bits", T.chili),
+              sp("  ✗ same on every main", T.faint),
+            ],
+          },
+        ]
+      : []),
     gap,
     { d: 500, spans: stage(4, "BUILD") },
     {
@@ -151,13 +168,25 @@ function buildLog(universe: MenuItem[], diet: string, st: Stats): LogLine[] {
 }
 
 interface DecompileLogProps {
-  universe: MenuItem[];
+  universe: CompiledItem[];
   diet: string;
   stats: Stats;
+  /** Menu size before the dietary constraint is applied. */
+  total: number;
+  filterOptions: FilterOptions;
+  hasSides: boolean;
   onComplete: () => void;
 }
 
-export default function DecompileLog({ universe, diet, stats, onComplete }: DecompileLogProps) {
+export default function DecompileLog({
+  universe,
+  diet,
+  stats,
+  total,
+  filterOptions,
+  hasSides,
+  onComplete,
+}: DecompileLogProps) {
   const [reducedMotion] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -165,7 +194,10 @@ export default function DecompileLog({ universe, diet, stats, onComplete }: Deco
       window.matchMedia("(prefers-reduced-motion: reduce)").matches
   );
 
-  const LOG = useMemo(() => buildLog(universe, diet, stats), [universe, diet, stats]);
+  const LOG = useMemo(
+    () => buildLog(universe, diet, stats, total, filterOptions, hasSides),
+    [universe, diet, stats, total, filterOptions, hasSides]
+  );
 
   // Reduced-motion skips the stagger but still lands on the dwell/confirm step —
   // it renders complete immediately rather than auto-advancing.

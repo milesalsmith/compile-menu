@@ -5,8 +5,8 @@ import { ASK_COST, H } from "./lib/entropy";
 import { entropyTrace, filterProducts, nextQuestion } from "./lib/flow";
 import { recommend, sidePair } from "./lib/recommend";
 import { dietFilter, statsOf } from "./lib/stats";
-import { MENU } from "./data/demo-menu";
-import { HEAT, QUESTIONS } from "./data/config";
+import { DEMO_MENU } from "./lib/menu";
+import type { HeatLevel } from "./data/config";
 import Landing from "./components/Landing";
 import DecompileLog from "./components/DecompileLog";
 import QuestionCard from "./components/QuestionCard";
@@ -28,11 +28,25 @@ export default function App() {
   const [showWork, setShowWork] = useState(false);
   const [showHow, setShowHow] = useState(false);
 
+  /* The menu being compiled. The demo dataset by default; an uploaded menu
+     replaces it wholesale, bringing its own vocabulary and questions. */
+  const menu = DEMO_MENU;
+  const { questions, filterOptions } = menu;
+  const hasSides = menu.vocabulary.hasSides;
+
+  const settingDims = useMemo(
+    () => ({
+      heatLevels: menu.vocabulary.heatLevels,
+      sideBuckets: hasSides ? undefined : 0,
+    }),
+    [menu, hasSides]
+  );
+
   /* Dietary requirement shrinks the universe BEFORE the flow — it's a
      constraint, not a ranked preference (rule 000-project.mdc rule 4). */
-  const universe = useMemo(() => dietFilter(diet), [diet]);
-  const S = useMemo(() => statsOf(universe), [universe]);
-  const fullStats = useMemo(() => statsOf(MENU), []);
+  const universe = useMemo(() => dietFilter(diet, menu.items), [diet, menu]);
+  const S = useMemo(() => statsOf(universe, settingDims), [universe, settingDims]);
+  const fullStats = useMemo(() => statsOf(menu.items, settingDims), [menu, settingDims]);
 
   const answers = useMemo(
     () => Object.fromEntries(history.map((h) => [h.qid, h.oid])) as Answers,
@@ -41,10 +55,22 @@ export default function App() {
   const pool = useMemo(() => filterProducts(answers, universe), [answers, universe]);
   const bits = H(pool.length);
 
-  const flow = useMemo(() => nextQuestion(answers, pool), [answers, pool]);
+  const flow = useMemo(
+    () => nextQuestion(answers, pool, { filterOptions, hasSides }),
+    [answers, pool, filterOptions, hasSides]
+  );
   const currentQuestion = useMemo(
-    () => (flow.currentId ? QUESTIONS.find((q) => q.id === flow.currentId) ?? null : null),
-    [flow.currentId]
+    () => (flow.currentId ? questions.find((q) => q.id === flow.currentId) ?? null : null),
+    [flow.currentId, questions]
+  );
+
+  const optionLabel = useCallback(
+    (qid: QuestionId) => {
+      const chosen = answers[qid];
+      if (chosen === undefined) return null;
+      return questions.find((q) => q.id === qid)?.options.find((o) => o.id === chosen) ?? null;
+    },
+    [answers, questions]
   );
 
   /* THE PHASE TRANSITION. IDENTIFY is entropy-driven; CONFIGURE is the
@@ -60,12 +86,12 @@ export default function App() {
     const list: QuestionId[] = [];
     if (pool.some((p) => p.heat)) list.push("heat");
     if (pool.some((p) => p.portion)) list.push("portion");
-    list.push("side");
+    if (hasSides) list.push("side");
     return list;
-  }, [pool]);
+  }, [pool, hasSides]);
   const configDone = configQs.filter((q) => answers[q] !== undefined).length;
   const identifyCount = history.filter(
-    (h) => QUESTIONS.find((q) => q.id === h.qid)?.kind === "filter"
+    (h) => questions.find((q) => q.id === h.qid)?.kind === "filter"
   ).length;
 
   const trace = useMemo(() => entropyTrace(history, universe), [history, universe]);
@@ -74,9 +100,18 @@ export default function App() {
     () => (screen === "results" ? recommend(answers, universe) : null),
     [screen, answers, universe]
   );
-  const heatMeta = HEAT.find((h) => h.id === answers.heat);
-  const portionLabel =
-    answers.portion === "single" ? "Single" : answers.portion === "double" ? "Double" : null;
+  const heatOption = optionLabel("heat");
+  const heatMeta: HeatLevel | undefined = heatOption
+    ? {
+        id: heatOption.id,
+        label: heatOption.label,
+        note: heatOption.note,
+        color: heatOption.color ?? T.ember,
+      }
+    : undefined;
+  const portionOption = optionLabel("portion");
+  const portionLabel = portionOption?.label ?? null;
+  const proteinLabel = optionLabel("protein")?.label ?? null;
 
   /* Answering is the only action that can complete the flow, so we detect
      completion here (in the event handler) rather than in an effect: apply
@@ -87,14 +122,14 @@ export default function App() {
     (qid: QuestionId, oid: string) => {
       const nextAnswers = { ...answers, [qid]: oid };
       const nextPool = filterProducts(nextAnswers, universe);
-      const nextFlow = nextQuestion(nextAnswers, nextPool);
+      const nextFlow = nextQuestion(nextAnswers, nextPool, { filterOptions, hasSides });
       setHistory((h) => [...h, { qid, oid }]);
       if (!nextFlow.currentId) {
-        setSideNames(sidePair(nextAnswers.side));
+        setSideNames(hasSides ? sidePair(nextAnswers.side) : null);
         setScreen("results");
       }
     },
-    [answers, universe]
+    [answers, universe, filterOptions, hasSides]
   );
   const back = useCallback(() => setHistory((h) => h.slice(0, -1)), []);
   const restart = useCallback(() => {
@@ -200,7 +235,15 @@ export default function App() {
         )}
 
         {screen === "compile" && (
-          <DecompileLog universe={universe} diet={diet} stats={S} onComplete={onCompileDone} />
+          <DecompileLog
+            universe={universe}
+            diet={diet}
+            stats={S}
+            total={menu.items.length}
+            filterOptions={filterOptions}
+            hasSides={hasSides}
+            onComplete={onCompileDone}
+          />
         )}
 
         {screen === "questions" && currentQuestion && (
@@ -365,6 +408,8 @@ export default function App() {
             answers={answers}
             heatMeta={heatMeta}
             portionLabel={portionLabel}
+            portionNote={menu.source === "upload" ? (portionOption?.note ?? null) : undefined}
+            proteinLabel={proteinLabel}
             sideNames={sideNames}
             identifyCount={identifyCount}
             configDone={configDone}
@@ -372,6 +417,10 @@ export default function App() {
             stats={S}
             pool={pool}
             trace={trace}
+            questions={questions}
+            filterOptions={filterOptions}
+            hasSides={hasSides}
+            total={menu.items.length}
             showWork={showWork}
             onShowWork={() => setShowWork(true)}
             onRestart={restart}

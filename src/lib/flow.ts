@@ -1,5 +1,5 @@
-import type { Answers, MenuItem, QuestionId } from "./types";
-import { ASK_COST, FILTER_QUESTION_IDS, gain, H, subpool } from "./entropy";
+import type { Answers, CompiledItem, FilterOptions, QuestionId } from "./types";
+import { ASK_COST, FILTER_OPTIONS, FILTER_QUESTION_IDS, gain, H, subpool } from "./entropy";
 
 /* ---------- FLOW (universe-aware, argmax-gain question selection) ---------- */
 /* Ported from menu-compiler.jsx's `flow`/`filterProducts`/`trace` useMemos —
@@ -15,7 +15,7 @@ function isFilterQuestion(qid: QuestionId): qid is FilterQuestionId {
 /* Apply each answered FILTER question's subpool in turn. Config answers
    (heat/portion/side) are present in `answers` too but never narrow the
    pool — subpool() already no-ops for them; this guard skips the call. */
-export function filterProducts(answers: Answers, universe: MenuItem[]): MenuItem[] {
+export function filterProducts<T extends CompiledItem>(answers: Answers, universe: T[]): T[] {
   let pool = universe;
   for (const [qid, oid] of Object.entries(answers)) {
     if (oid === undefined) continue;
@@ -68,13 +68,28 @@ export interface FlowState {
   exhausted: ExhaustedQuestion[];
 }
 
+/* Per-menu knobs. Both default to the demo dataset's behaviour, so existing
+   call sites and every verified number are unaffected. Uploaded menus pass
+   their own option values and set hasSides false — we never invent sides. */
+export interface FlowOptions {
+  filterOptions?: FilterOptions;
+  hasSides?: boolean;
+}
+
 /* Next-question selection. Argmax-gain unanswered filter question if its
    gain clears ASK_COST; else heat (if applicable), then portion (if any
    survivor is portion-configurable), then side, then done. Config
    not-applicable backfills into `exhausted` when we skip past them. */
-export function nextQuestion(answers: Answers, pool: MenuItem[]): FlowState {
+export function nextQuestion(
+  answers: Answers,
+  pool: CompiledItem[],
+  opts: FlowOptions = {}
+): FlowState {
+  const filterOptions = opts.filterOptions ?? FILTER_OPTIONS;
+  const hasSides = opts.hasSides ?? true;
+
   const gains: QuestionGain[] = FILTER_QUESTION_IDS.filter((qid) => answers[qid] === undefined)
-    .map((qid) => ({ qid, gain: gain(qid, pool) }))
+    .map((qid) => ({ qid, gain: gain(qid, pool, filterOptions) }))
     .sort((a, b) => b.gain - a.gain);
 
   const exhausted: ExhaustedQuestion[] = gains
@@ -99,18 +114,27 @@ export function nextQuestion(answers: Answers, pool: MenuItem[]): FlowState {
     return { currentId: "portion", phase: phaseFor("portion"), gains, exhausted: withHeat };
   }
 
-  if (answers.side === undefined) {
-    let finalExhausted = exhausted;
+  const withConfigBackfill = (): ExhaustedQuestion[] => {
+    let out = exhausted;
     if (answers.heat === undefined && !heatApplies) {
-      finalExhausted = [...finalExhausted, { qid: "heat", gain: 0, reason: "not_applicable" }];
+      out = [...out, { qid: "heat", gain: 0, reason: "not_applicable" }];
     }
     if (answers.portion === undefined && !portionApplies) {
-      finalExhausted = [...finalExhausted, { qid: "portion", gain: 0, reason: "not_applicable" }];
+      out = [...out, { qid: "portion", gain: 0, reason: "not_applicable" }];
     }
-    return { currentId: "side", phase: phaseFor("side"), gains, exhausted: finalExhausted };
+    return out;
+  };
+
+  if (hasSides && answers.side === undefined) {
+    return { currentId: "side", phase: phaseFor("side"), gains, exhausted: withConfigBackfill() };
   }
 
-  return { currentId: null, phase: phaseFor(null), gains, exhausted };
+  return {
+    currentId: null,
+    phase: phaseFor(null),
+    gains,
+    exhausted: hasSides ? exhausted : withConfigBackfill(),
+  };
 }
 
 export interface HistoryEntry {
@@ -127,7 +151,10 @@ export interface EntropyTraceRow {
 
 /* Per-answer entropy trace: pool size and H before/after each answer, in
    the order answered. Ports the reference's `trace` useMemo exactly. */
-export function entropyTrace(history: HistoryEntry[], universe: MenuItem[]): EntropyTraceRow[] {
+export function entropyTrace(
+  history: HistoryEntry[],
+  universe: CompiledItem[]
+): EntropyTraceRow[] {
   const rows: EntropyTraceRow[] = [];
   let acc: Answers = {};
   let prevPool = universe;

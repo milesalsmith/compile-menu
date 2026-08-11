@@ -1,10 +1,10 @@
 import { T } from "../theme";
-import type { MenuItem, Question, QuestionId } from "../lib/types";
+import type { CompiledItem, Question, QuestionId } from "../lib/types";
 import { H, subpool } from "../lib/entropy";
 
 interface QuestionCardProps {
   question: Question;
-  pool: MenuItem[];
+  pool: CompiledItem[];
   showWork: boolean;
   onAnswer: (qid: QuestionId, oid: string) => void;
 }

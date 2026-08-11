@@ -1,4 +1,4 @@
-import type { MenuItem, QuestionId } from "./types";
+import type { CompiledItem, FilterOptions, QuestionId } from "./types";
 
 /* ---------- ID3 ENGINE (universe-aware) ---------- */
 /* Ported from menu-compiler.jsx — see .cursor/rules/010-engine.mdc for the
@@ -15,12 +15,13 @@ export function H(n: number): number {
   return n <= 1 ? 0 : Math.log2(n);
 }
 
-/* Option ids for each filter question, mirroring QUESTIONS in
-   menu-compiler.jsx.    Only format/protein/style narrow the pool — heat, portion and side are
-   zero-gain settings, not products (see rule 010-engine.mdc).
-   Exported so flow.ts (which filter questions exist, in what order) and
-   tests (exhaustive path enumeration) share this single source of truth. */
-export const FILTER_OPTIONS: Record<"format" | "protein" | "style", readonly string[]> = {
+/* Option ids for each filter question on the DEMO dataset, mirroring
+   QUESTIONS in menu-compiler.jsx. Only format/protein/style narrow the pool
+   — heat, portion and side are zero-gain settings, not products (see rule
+   010-engine.mdc). Exported so flow.ts (which filter questions exist, in
+   what order) and tests (exhaustive path enumeration) share this single
+   source of truth. An uploaded menu passes its own option set instead. */
+export const FILTER_OPTIONS: FilterOptions = {
   format: ["burger", "pitta", "wrap", "plate", "bowl"],
   protein: ["breast", "thigh", "wings", "veg"],
   style: ["classic", "cheesy", "garlicky", "loaded", "fresh"],
@@ -30,7 +31,7 @@ export const FILTER_QUESTION_IDS = Object.keys(FILTER_OPTIONS) as ReadonlyArray<
   keyof typeof FILTER_OPTIONS
 >;
 
-export function subpool(pool: MenuItem[], qid: QuestionId, oid: string): MenuItem[] {
+export function subpool<T extends CompiledItem>(pool: T[], qid: QuestionId, oid: string): T[] {
   if (qid === "format") return pool.filter((p) => p.format === oid);
   if (qid === "protein")
     return pool.filter((p) =>
@@ -40,9 +41,15 @@ export function subpool(pool: MenuItem[], qid: QuestionId, oid: string): MenuIte
   return pool; // heat, portion & side never narrow the product set
 }
 
-export function gain(qid: QuestionId, pool: MenuItem[]): number {
+/* `options` defaults to the demo vocabulary, so every existing call site and
+   every verified number in 010-engine.mdc is unaffected. */
+export function gain(
+  qid: QuestionId,
+  pool: CompiledItem[],
+  filterOptions: FilterOptions = FILTER_OPTIONS
+): number {
   if (qid === "heat" || qid === "portion" || qid === "side") return 0;
-  const options = FILTER_OPTIONS[qid];
+  const options = filterOptions[qid];
   const sizes = options.map((oid) => subpool(pool, qid, oid).length).filter((n) => n > 0);
   if (sizes.length <= 1) return 0;
   const tot = sizes.reduce((a, b) => a + b, 0);

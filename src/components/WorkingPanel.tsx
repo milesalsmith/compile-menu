@@ -1,11 +1,15 @@
 import { T } from "../theme";
-import type { Answers, MenuItem, QuestionId } from "../lib/types";
+import type {
+  Answers,
+  CompiledItem,
+  FilterOptions,
+  Question,
+  QuestionId,
+} from "../lib/types";
 import { ASK_COST, FILTER_QUESTION_IDS, gain } from "../lib/entropy";
 import type { EntropyTraceRow, QuestionGain } from "../lib/flow";
 import { tieBreak, type RecommendResult } from "../lib/recommend";
 import type { Stats } from "../lib/stats";
-import { MENU } from "../data/demo-menu";
-import { QUESTIONS } from "../data/config";
 
 /* The "show working" transparency layer — a first-class feature, not debug
    chrome (rule 030-ui.mdc). Two variants:
@@ -19,25 +23,29 @@ interface FlowVariantProps {
   variant: "flow";
   gains: QuestionGain[];
   currentQid: QuestionId | null;
-  pool: MenuItem[];
+  pool: CompiledItem[];
   bits: number;
   trace: EntropyTraceRow[];
 }
 
 interface ResultsVariantProps {
   variant: "results";
-  pool: MenuItem[];
+  pool: CompiledItem[];
   diet: string;
   stats: Stats;
   trace: EntropyTraceRow[];
   answers: Answers;
   result: RecommendResult;
+  questions: Question[];
+  filterOptions: FilterOptions;
+  hasSides: boolean;
+  /** Menu size before the dietary constraint is applied. */
+  total: number;
 }
 
 type WorkingPanelProps = FlowVariantProps | ResultsVariantProps;
 
 const FILTER_DIMENSIONS = FILTER_QUESTION_IDS.length;
-const CONFIG_DIMENSIONS = QUESTIONS.filter((q) => q.kind === "config").length;
 
 export default function WorkingPanel(props: WorkingPanelProps) {
   if (props.variant === "flow") return <FlowPanel {...props} />;
@@ -104,7 +112,19 @@ function FlowPanel({ gains, currentQid, pool, bits, trace }: FlowVariantProps) {
   );
 }
 
-function ResultsPanel({ pool, diet, stats, trace, answers, result }: ResultsVariantProps) {
+function ResultsPanel({
+  pool,
+  diet,
+  stats,
+  trace,
+  answers,
+  result,
+  questions,
+  filterOptions,
+  hasSides,
+  total,
+}: ResultsVariantProps) {
+  const configDimensions = questions.filter((q) => q.kind === "config").length;
   return (
     <div
       className="mono rise"
@@ -124,7 +144,7 @@ function ResultsPanel({ pool, diet, stats, trace, answers, result }: ResultsVari
       </p>
       {diet !== "all" && (
         <p style={{ margin: 0 }}>
-          constraint: <span style={{ color: T.chili }}>{diet}</span> → universe {MENU.length} →{" "}
+          constraint: <span style={{ color: T.chili }}>{diet}</span> → universe {total} →{" "}
           {stats.products} products
         </p>
       )}
@@ -142,8 +162,8 @@ function ResultsPanel({ pool, diet, stats, trace, answers, result }: ResultsVari
           )}
         </p>
       ))}
-      {QUESTIONS.filter((q) => q.kind === "filter" && answers[q.id] === undefined).map((q) => {
-        const g = gain(q.id, pool);
+      {questions.filter((q) => q.kind === "filter" && answers[q.id] === undefined).map((q) => {
+        const g = gain(q.id, pool, filterOptions);
         return (
           <p key={q.id} style={{ margin: 0, color: T.faint }}>
             <span style={{ color: T.chili }}>−</span> {q.id}: never asked —{" "}
@@ -178,14 +198,16 @@ function ResultsPanel({ pool, diet, stats, trace, answers, result }: ResultsVari
       <p style={{ margin: "12px 0 4px", color: T.faint }}>// 3. why the menu compressed</p>
       <p style={{ margin: 0 }}>
         {stats.products} products · {stats.components} unique components · {FILTER_DIMENSIONS}{" "}
-        product dimensions + {CONFIG_DIMENSIONS} settings.
+        product dimensions + {configDimensions} settings.
       </p>
       <p style={{ margin: 0 }}>
         heat: selectable on {stats.heatCount}/{stats.products} items → 0 bits of product information.
       </p>
-      <p style={{ margin: 0 }}>
-        sides: identical on every main → 0 bits. the math lifts both out automatically.
-      </p>
+      {hasSides && (
+        <p style={{ margin: 0 }}>
+          sides: identical on every main → 0 bits. the math lifts both out automatically.
+        </p>
+      )}
       <p style={{ margin: "6px 0 0", color: T.faint }}>
         // allergens deliberately excluded — safety-critical fields are never inferred.
       </p>

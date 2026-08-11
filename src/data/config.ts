@@ -32,6 +32,16 @@ export const HEAT: HeatLevel[] = [
   { id: "xhot", label: "Extra hot", note: "Sign the waiver", color: "#8E1A1A" },
 ];
 
+/* Spice scale for UPLOADED menus. App-authored UI copy on a neutral scale —
+   we never invent menu content, and the demo scale above is chicken-shop
+   specific. Only offered when a surviving uploaded item is heat-configurable. */
+export const UPLOAD_HEAT: HeatLevel[] = [
+  { id: "none", label: "No heat", note: "Leave it plain", color: "#D9C46B" },
+  { id: "mild", label: "Mild", note: "Gentle warmth", color: "#DFA13F" },
+  { id: "medium", label: "Medium", note: "Noticeable heat", color: "#D96B2B" },
+  { id: "hot", label: "Hot", note: "You'll feel it", color: "#C43A1E" },
+];
+
 export const QUESTIONS: Question[] = [
   {
     id: "format",
