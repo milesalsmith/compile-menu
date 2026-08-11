@@ -22,7 +22,9 @@
 	 * Cloudflare-native by design: no third-party provider, no API key secret.
 	 */
 	"ai": {
-		"binding": "AI"
+		"binding": "AI",
+		/* Workers AI has no local emulation: dev always calls the real thing. */
+		"remote": true
 	}
 	/**
 	 * Smart Placement

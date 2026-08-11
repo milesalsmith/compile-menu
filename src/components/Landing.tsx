@@ -9,6 +9,10 @@ interface LandingProps {
   diet: string;
   onDiet: (id: string) => void;
   onStart: () => void;
+  /** The uploaded file's name, when the loaded menu came from an upload. */
+  uploadLabel: string | null;
+  onUpload: () => void;
+  onUseDemo: () => void;
   showHow: boolean;
   onToggleHow: () => void;
 }
@@ -19,6 +23,9 @@ export default function Landing({
   diet,
   onDiet,
   onStart,
+  uploadLabel,
+  onUpload,
+  onUseDemo,
   showHow,
   onToggleHow,
 }: LandingProps) {
@@ -54,7 +61,14 @@ export default function Landing({
           marginBottom: 34,
         }}
       >
-        Modelled on a real, well-known flame-grilled chicken menu.
+        {uploadLabel ? (
+          <>
+            Compiled from <span style={{ color: T.text }}>{uploadLabel}</span>, held in this tab
+            only.
+          </>
+        ) : (
+          "Modelled on a real, well-known flame-grilled chicken menu."
+        )}
         <br />
         It compresses a complicated menu into as few questions as possible, so you land on exactly
         what to order.
@@ -104,10 +118,27 @@ export default function Landing({
           padding: "15px 28px",
           borderRadius: 8,
           display: "block",
-          marginBottom: 30,
+          marginBottom: 12,
         }}
       >
         Decompile the menu
+      </button>
+
+      <button
+        onClick={uploadLabel ? onUseDemo : onUpload}
+        className="mono"
+        style={{
+          background: "none",
+          border: `1px solid ${T.line}`,
+          color: T.dim,
+          fontSize: 12.5,
+          padding: "11px 18px",
+          borderRadius: 8,
+          display: "block",
+          marginBottom: 30,
+        }}
+      >
+        {uploadLabel ? "↺ back to the demo menu" : "↑ compile your own menu PDF"}
       </button>
 
       <button

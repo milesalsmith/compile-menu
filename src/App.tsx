@@ -5,15 +5,17 @@ import { ASK_COST, H } from "./lib/entropy";
 import { entropyTrace, filterProducts, nextQuestion } from "./lib/flow";
 import { recommend, sidePair } from "./lib/recommend";
 import { dietFilter, statsOf } from "./lib/stats";
+import type { CompiledMenu } from "./lib/menu";
 import { DEMO_MENU } from "./lib/menu";
 import type { HeatLevel } from "./data/config";
 import Landing from "./components/Landing";
+import MenuUpload from "./components/MenuUpload";
 import DecompileLog from "./components/DecompileLog";
 import QuestionCard from "./components/QuestionCard";
 import WorkingPanel from "./components/WorkingPanel";
 import Results from "./components/Results";
 
-type Screen = "landing" | "compile" | "questions" | "results";
+type Screen = "landing" | "upload" | "compile" | "questions" | "results";
 
 interface HistoryEntry {
   qid: QuestionId;
@@ -29,8 +31,9 @@ export default function App() {
   const [showHow, setShowHow] = useState(false);
 
   /* The menu being compiled. The demo dataset by default; an uploaded menu
-     replaces it wholesale, bringing its own vocabulary and questions. */
-  const menu = DEMO_MENU;
+     replaces it wholesale, bringing its own vocabulary and questions. It
+     lives in component state and nowhere else — closing the tab forgets it. */
+  const [menu, setMenu] = useState<CompiledMenu>(DEMO_MENU);
   const { questions, filterOptions } = menu;
   const hasSides = menu.vocabulary.hasSides;
 
@@ -139,6 +142,14 @@ export default function App() {
   }, []);
   const onCompileDone = useCallback(() => setScreen("questions"), []);
 
+  const swapMenu = useCallback((next: CompiledMenu, to: Screen) => {
+    setMenu(next);
+    setHistory([]);
+    setSideNames(null);
+    setDiet("all");
+    setScreen(to);
+  }, []);
+
   return (
     <div
       style={{
@@ -229,8 +240,18 @@ export default function App() {
             diet={diet}
             onDiet={setDiet}
             onStart={() => setScreen("compile")}
+            uploadLabel={menu.source === "upload" ? menu.label : null}
+            onUpload={() => setScreen("upload")}
+            onUseDemo={() => swapMenu(DEMO_MENU, "landing")}
             showHow={showHow}
             onToggleHow={() => setShowHow((h) => !h)}
+          />
+        )}
+
+        {screen === "upload" && (
+          <MenuUpload
+            onCompiled={(next) => swapMenu(next, "compile")}
+            onCancel={() => swapMenu(DEMO_MENU, "landing")}
           />
         )}
 
