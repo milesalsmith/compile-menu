@@ -75,8 +75,18 @@ export const QUESTIONS: Question[] = [
     id: "heat",
     kind: "config",
     prompt: "How spicy?",
-    sub: "Zero information gain about which product — pure setting. The math is why this comes last.",
+    sub: "Zero information gain about which product — pure setting.",
     options: HEAT.map((h) => ({ id: h.id, label: h.label, note: h.note, color: h.color })),
+  },
+  {
+    id: "portion",
+    kind: "config",
+    prompt: "How hungry are you?",
+    sub: "Also zero-gain: single vs double is appetite, not which product.",
+    options: [
+      { id: "single", label: "Single", note: "One breast — enough" },
+      { id: "double", label: "Double", note: "Two breasts — more of it" },
+    ],
   },
   {
     id: "side",

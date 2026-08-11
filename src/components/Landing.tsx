@@ -146,8 +146,8 @@ export default function Landing({
             itself.
           </p>
           <p style={{ margin: 0 }}>
-            5. spice and sides carry zero bits about which product you get — they're settings, asked
-            last.
+            5. spice, portion and sides carry zero bits about which product you get — they're
+            settings, asked last.
           </p>
           <p style={{ margin: "10px 0 0", color: T.faint }}>
             dietary toggles are hard constraints, applied before any question. no allergen or

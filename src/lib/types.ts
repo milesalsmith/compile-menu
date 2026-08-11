@@ -15,10 +15,12 @@ export interface MenuItem {
   vegetarian: boolean;
   vegan: boolean;
   heat: boolean;
+  /** When true, single vs double is a setting — not a separate product. */
+  portion: boolean;
   plain: string;
 }
 
-export type QuestionId = "format" | "protein" | "style" | "heat" | "side";
+export type QuestionId = "format" | "protein" | "style" | "heat" | "portion" | "side";
 export type QuestionKind = "filter" | "config";
 
 export interface QuestionOption {

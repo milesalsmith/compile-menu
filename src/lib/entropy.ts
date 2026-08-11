@@ -16,8 +16,8 @@ export function H(n: number): number {
 }
 
 /* Option ids for each filter question, mirroring QUESTIONS in
-   menu-compiler.jsx. Only format/protein/style narrow the pool — heat and
-   side are zero-gain settings, not products (see rule 010-engine.mdc).
+   menu-compiler.jsx.    Only format/protein/style narrow the pool — heat, portion and side are
+   zero-gain settings, not products (see rule 010-engine.mdc).
    Exported so flow.ts (which filter questions exist, in what order) and
    tests (exhaustive path enumeration) share this single source of truth. */
 export const FILTER_OPTIONS: Record<"format" | "protein" | "style", readonly string[]> = {
@@ -37,11 +37,11 @@ export function subpool(pool: MenuItem[], qid: QuestionId, oid: string): MenuIte
       oid === "veg" ? p.vegetarian : !p.vegetarian && (p.proteins as readonly string[]).includes(oid)
     );
   if (qid === "style") return pool.filter((p) => (p.styles as readonly string[]).includes(oid));
-  return pool; // heat & side never narrow the product set
+  return pool; // heat, portion & side never narrow the product set
 }
 
 export function gain(qid: QuestionId, pool: MenuItem[]): number {
-  if (qid === "heat" || qid === "side") return 0;
+  if (qid === "heat" || qid === "portion" || qid === "side") return 0;
   const options = FILTER_OPTIONS[qid];
   const sizes = options.map((oid) => subpool(pool, qid, oid).length).filter((n) => n > 0);
   if (sizes.length <= 1) return 0;

@@ -56,18 +56,21 @@ dependency, unit-tested against the demo dataset's real numbers in
 [`src/lib/entropy.test.ts`](src/lib/entropy.test.ts) and
 [`src/lib/flow.test.ts`](src/lib/flow.test.ts):
 
-- `H(24) ≈ 4.585` bits for the full 24-item demo menu.
-- Opening gains: format ≈ 2.28 > style ≈ 1.61 > protein ≈ 1.32 bits — format
+- `H(21) ≈ 4.392` bits for the full demo menu (classic grilled single/double
+  handhelds collapsed into portion settings).
+- Opening gains: format ≈ 2.27 > style ≈ 1.63 > protein ≈ 1.34 bits — format
   is asked first.
 - `format=plate` → `protein=thigh` drains style's gain to exactly 0; it
   self-removes.
 - `format=burger` → `protein=veg` leaves no surviving item with heat; heat
   self-removes as not applicable.
+- `format=wrap` → `protein=breast` resolves to one portion-configurable item;
+  style is zero-gain.
 - Vegan universe: 2 items, 1.00 bit, and protein/style both collapse to zero
   gain — the flow resolves in a single question.
-- `ASK_COST` (0.5 bits) fires on exactly 2 of the 23 terminal answer paths;
-  worst-case survivors after all filter questions is 3; survivor
-  distribution across every path is `{1: 15, 2: 5, 3: 3}`.
+- `ASK_COST` (0.5 bits) fires on exactly 1 of the 23 terminal answer paths
+  (bowl→breast); worst-case survivors after all filter questions is 3;
+  survivor distribution across every path is `{1: 17, 2: 4, 3: 2}`.
 
 These are acceptance tests, not snapshots — see
 [`.cursor/rules/010-engine.mdc`](.cursor/rules/010-engine.mdc) for the full
@@ -91,7 +94,7 @@ src/
 │   ├── flow.ts        # next-question selection, self-removal, entropy trace
 │   ├── recommend.ts   # tie-break + final pick, side pairing
 │   └── stats.ts       # dietary filtering, menu stats
-├── data/            # the demo dataset (24 items) + UI question copy
+├── data/            # the demo dataset (21 items) + UI question copy
 ├── components/      # Landing, DecompileLog, QuestionCard, WorkingPanel, Results
 └── App.tsx          # owns state, wires components to the engine
 worker/
@@ -100,7 +103,7 @@ worker/
 
 ## What's here vs. what's planned
 
-This is currently a **deterministic demo on a fixed, hand-built 24-item
+This is currently a **deterministic demo on a fixed, hand-built 21-item
 dataset** — the compiler itself is fully real and tested, but "compile your
 own menu" (paste text or upload a PDF, extract structure via the Anthropic
 API, run the same engine on it) is designed but not yet wired up. The

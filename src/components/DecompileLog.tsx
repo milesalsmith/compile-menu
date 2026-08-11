@@ -116,6 +116,15 @@ function buildLog(universe: MenuItem[], diet: string, st: Stats): LogLine[] {
       d: 430,
       spans: [
         sp("        ", null),
+        sp("portion ", T.text),
+        sp("0.00 bits", T.chili),
+        sp("  ✗ single vs double — appetite, not identity", T.faint),
+      ],
+    },
+    {
+      d: 430,
+      spans: [
+        sp("        ", null),
         sp("sides   ", T.text),
         sp("0.00 bits", T.chili),
         sp("  ✗ same on every main", T.faint),

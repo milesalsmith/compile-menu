@@ -5,12 +5,15 @@ import { MENU } from "../data/demo-menu";
 /* Acceptance tests for .cursor/rules/010-engine.mdc — "Verified numbers".
    These numbers are the acceptance tests for the engine: if a future change
    to entropy.ts/demo-menu.ts breaks one of these, the change is wrong, not
-   the number. Do not loosen a tolerance to make a regression pass. */
+   the number. Do not loosen a tolerance to make a regression pass.
+
+   Universe is 21 items after collapsing classic grilled single/double
+   handhelds into portion-configurable products. */
 
 describe("H — entropy of a pool under a uniform prior", () => {
-  it("H(24) ≈ 4.585 for the full demo menu", () => {
-    expect(MENU.length).toBe(24);
-    expect(H(MENU.length)).toBeCloseTo(4.585, 2);
+  it("H(21) ≈ 4.392 for the full demo menu", () => {
+    expect(MENU.length).toBe(21);
+    expect(H(MENU.length)).toBeCloseTo(4.392, 2);
   });
 
   it("is 0 for pools of size 0 or 1, per the H(n<=1)=0 definition", () => {
@@ -19,21 +22,21 @@ describe("H — entropy of a pool under a uniform prior", () => {
   });
 });
 
-describe("opening gains on the full 24-item universe", () => {
+describe("opening gains on the full 21-item universe", () => {
   const gFormat = gain("format", MENU);
   const gStyle = gain("style", MENU);
   const gProtein = gain("protein", MENU);
 
-  it("gain(format) ≈ 2.28", () => {
-    expect(gFormat).toBeCloseTo(2.28, 2);
+  it("gain(format) ≈ 2.27", () => {
+    expect(gFormat).toBeCloseTo(2.27, 2);
   });
 
-  it("gain(style) ≈ 1.61", () => {
-    expect(gStyle).toBeCloseTo(1.61, 2);
+  it("gain(style) ≈ 1.63", () => {
+    expect(gStyle).toBeCloseTo(1.63, 2);
   });
 
-  it("gain(protein) ≈ 1.32", () => {
-    expect(gProtein).toBeCloseTo(1.32, 2);
+  it("gain(protein) ≈ 1.34", () => {
+    expect(gProtein).toBeCloseTo(1.34, 2);
   });
 
   it("format has the highest opening gain and is asked first", () => {
@@ -52,6 +55,13 @@ describe("self-removal paths", () => {
     const pool = subpool(subpool(MENU, "format", "burger"), "protein", "veg");
     expect(pool.length).toBeGreaterThan(0);
     expect(pool.every((p) => !p.heat)).toBe(true);
+  });
+
+  it("format=wrap then protein=breast resolves to one portion-configurable item — style is zero-gain", () => {
+    const pool = subpool(subpool(MENU, "format", "wrap"), "protein", "breast");
+    expect(pool.length).toBe(1);
+    expect(pool[0].portion).toBe(true);
+    expect(gain("style", pool)).toBe(0);
   });
 });
 
@@ -80,13 +90,6 @@ describe("ASK_COST threshold — a question must earn its tap", () => {
     expect(ASK_COST).toBe(0.5);
   });
 
-  it("format=wrap then protein=breast: gain(style) ≈ 0.33 < ASK_COST — never asked", () => {
-    const pool = subpool(subpool(MENU, "format", "wrap"), "protein", "breast");
-    const g = gain("style", pool);
-    expect(g).toBeCloseTo(0.33, 2);
-    expect(g).toBeLessThan(ASK_COST);
-  });
-
   it("format=bowl then protein=breast: gain(style) ≈ 0.33 < ASK_COST — never asked", () => {
     const pool = subpool(subpool(MENU, "format", "bowl"), "protein", "breast");
     const g = gain("style", pool);
@@ -96,11 +99,22 @@ describe("ASK_COST threshold — a question must earn its tap", () => {
 });
 
 describe("config questions never carry product information", () => {
-  it("gain(heat) and gain(side) are always 0, regardless of pool", () => {
+  it("gain(heat), gain(portion) and gain(side) are always 0, regardless of pool", () => {
     expect(gain("heat", MENU)).toBe(0);
+    expect(gain("portion", MENU)).toBe(0);
     expect(gain("side", MENU)).toBe(0);
     const pool = subpool(MENU, "format", "plate");
     expect(gain("heat", pool)).toBe(0);
+    expect(gain("portion", pool)).toBe(0);
     expect(gain("side", pool)).toBe(0);
+  });
+
+  it("exactly three classic grilled handhelds are portion-configurable", () => {
+    const portioned = MENU.filter((p) => p.portion);
+    expect(portioned.map((p) => p.id).sort()).toEqual([
+      "grilled-burger",
+      "grilled-pitta",
+      "grilled-wrap",
+    ]);
   });
 });
