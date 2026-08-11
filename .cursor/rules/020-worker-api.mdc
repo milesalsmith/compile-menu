@@ -14,24 +14,52 @@ alwaysApply: false
 
 ## Extraction endpoint (`POST /api/extract`)
 - Cloudflare-native. No third-party AI provider, no API-key secret.
-- Accepts `multipart/form-data` with one PDF. Validate MIME type is
-  `application/pdf` and enforce a size cap (8 MB) BEFORE any AI call.
+- Rate limit FIRST, using the platform's own rate limiting binding, before
+  the body is read and long before any AI call. No stored counters, no KV.
+- Accepts `multipart/form-data` with one PDF. Enforce the size cap (8 MB)
+  BEFORE reading the file into memory.
+- The client's MIME type is ADVISORY — it is a claim, not evidence. It may
+  buy a cheap early exit, but the `%PDF-` file signature decides whether the
+  bytes are converted, and the `ConversionResult` mimetype must be confirmed
+  as `application/pdf` before any converted text reaches the model.
 - Conversion: `env.AI.toMarkdown({ name, blob }, { conversionOptions:
   { pdf: { metadata: false } } })`. Metadata is token noise for extraction.
   A `ConversionResult` with `format === "error"` is a user-facing failure.
-- Cap converted markdown (~50k chars) before it reaches the model.
+- There is a ceiling (~50k chars) on converted markdown. Past it, FAIL with a
+  friendly message. Never truncate silently: compiling part of a document and
+  presenting it as the menu is a quietly wrong answer, which is worse than a
+  refusal.
 - Extraction model: Workers AI text model supporting JSON Mode, pinned in a
   single constant so it can be swapped. Request structured output via
   `response_format: { type: "json_schema", json_schema: {...} }`.
 - Workers AI does NOT guarantee schema compliance; it returns an explicit
   `JSON Mode couldn't be met` error. Handle it as its own failure mode.
-- The AI binding is `AI` in wrangler.jsonc (`"ai": { "binding": "AI" }`).
+- Bindings in wrangler.jsonc: `"ai": { "binding": "AI", "remote": true }`
+  (Workers AI has no local emulation, so dev calls the real service) and one
+  `ratelimits` entry for the extraction route.
 - Provider concerns live behind one port interface so the model can change.
 - Extraction output uses per-menu vocabulary; never coerce into the demo
   enums. It must NOT include any allergen/gluten-free field, ever.
 - Validate deterministically. Reject invalid or model-invented output;
   never silently repair. Require >= 4 valid items AND enough attribute
   variety that at least one filter question clears ASK_COST.
+- SOURCE GROUNDING. Vocabulary closure proves only that the model agrees with
+  itself — it writes both the option list and the attributes. Anything
+  load-bearing is checked against the converted markdown, which is the one
+  input to this step the model did not write. A model-generated value is
+  never treated as grounded because it matches another model-generated field.
+  - Every item carries quoted `evidence` from the document. The evidence must
+    appear in the markdown, the item's name must appear inside the evidence,
+    and evidence is length-capped so quoting the whole document proves
+    nothing.
+  - `vegetarian` / `vegan` are only true when the document itself marks them
+    in that item's evidence. Never infer either from ingredients. Dietary
+    status is a hard constraint on the universe, so an ungrounded claim gets
+    the item rejected, not downgraded.
+- Portion collapse requires more than a matching normalised name: every
+  attribute the engine decides on must agree too. A shared base name over
+  differing attributes means two products, and merging them would erase a
+  real branch of the decision tree.
 - Never log, persist, or write to disk any uploaded file or derived content.
 - The engine that consumes the result stays deterministic. Extraction is the
   only probabilistic step in the whole app.
