@@ -3,6 +3,8 @@ import { T } from "../theme";
 import type { CompiledItem, FilterOptions } from "../lib/types";
 import { ASK_COST, FILTER_QUESTION_IDS, gain } from "../lib/entropy";
 import type { Stats } from "../lib/stats";
+import type { ExtractionTrace } from "../lib/extraction/trace";
+import { formatTraceLines } from "../lib/extraction/trace";
 
 /* The four-stage READ / TOKENIZE / MEASURE / BUILD decompile animation.
    Ported from menu-compiler.jsx (buildLog + the compile-screen effect and
@@ -27,7 +29,8 @@ function buildLog(
   st: Stats,
   total: number,
   filterOptions: FilterOptions,
-  hasSides: boolean
+  hasSides: boolean,
+  extractionTrace?: ExtractionTrace
 ): LogLine[] {
   const gains = FILTER_QUESTION_IDS.map((id) => ({ id, g: gain(id, universe, filterOptions) })).sort(
     (a, b) => b.g - a.g
@@ -37,7 +40,20 @@ function buildLog(
   const ex = universe[1] || universe[0];
   const stage = (n: number, label: string): Span[] => [sp(`[${n}/4] `, T.gold), sp(label, T.text)];
   const gap: LogLine = { d: 220, spans: [sp(" ", null)] };
+  const fence: LogLine[] = extractionTrace
+    ? [
+        { d: 400, spans: [sp("// extraction fence", T.faint)] },
+        ...formatTraceLines(extractionTrace).map(
+          (line): LogLine => ({
+            d: 280,
+            spans: [sp(line.startsWith("  −") ? line : `      ${line}`, line.startsWith("  −") ? T.chili : T.dim)],
+          })
+        ),
+        gap,
+      ]
+    : [];
   return [
+    ...fence,
     { d: 450, spans: stage(1, "READ") },
     { d: 500, spans: [sp("      ", null), sp(`${total} products on the menu`, T.dim)] },
     ...(diet !== "all"
@@ -175,6 +191,7 @@ interface DecompileLogProps {
   total: number;
   filterOptions: FilterOptions;
   hasSides: boolean;
+  extractionTrace?: ExtractionTrace;
   onComplete: () => void;
 }
 
@@ -185,6 +202,7 @@ export default function DecompileLog({
   total,
   filterOptions,
   hasSides,
+  extractionTrace,
   onComplete,
 }: DecompileLogProps) {
   const [reducedMotion] = useState(
@@ -195,8 +213,8 @@ export default function DecompileLog({
   );
 
   const LOG = useMemo(
-    () => buildLog(universe, diet, stats, total, filterOptions, hasSides),
-    [universe, diet, stats, total, filterOptions, hasSides]
+    () => buildLog(universe, diet, stats, total, filterOptions, hasSides, extractionTrace),
+    [universe, diet, stats, total, filterOptions, hasSides, extractionTrace]
   );
 
   // Reduced-motion skips the stagger but still lands on the dwell/confirm step —

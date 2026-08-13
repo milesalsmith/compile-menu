@@ -263,6 +263,7 @@ export default function App() {
             total={menu.items.length}
             filterOptions={filterOptions}
             hasSides={hasSides}
+            extractionTrace={menu.trace}
             onComplete={onCompileDone}
           />
         )}

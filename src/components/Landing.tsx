@@ -138,7 +138,14 @@ export default function Landing({
           marginBottom: 30,
         }}
       >
-        {uploadLabel ? "↺ back to the demo menu" : "↑ compile your own menu PDF"}
+        {uploadLabel ? (
+          "↺ back to the demo menu"
+        ) : (
+          <>
+            ↑ compile your own menu PDF{" "}
+            <span style={{ color: T.faint }}>beta</span>
+          </>
+        )}
       </button>
 
       <button

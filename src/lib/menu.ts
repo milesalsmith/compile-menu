@@ -1,6 +1,7 @@
 import type { CompiledItem, FilterId, FilterOptions, Question, QuestionOption } from "./types";
 import type { MenuVocabulary } from "./vocabulary";
 import { filterOptionsOf } from "./vocabulary";
+import type { ExtractionTrace } from "./extraction/trace";
 import { FILTER_OPTIONS } from "./entropy";
 import { MENU } from "../data/demo-menu";
 import { QUESTIONS, UPLOAD_HEAT } from "../data/config";
@@ -23,6 +24,8 @@ export interface CompiledMenu {
   vocabulary: MenuVocabulary;
   questions: Question[];
   filterOptions: FilterOptions;
+  /** Present on uploaded menus: timings and drop reasons from the fence. */
+  trace?: ExtractionTrace;
 }
 
 const FILTER_IDS: readonly FilterId[] = ["format", "protein", "style"];
@@ -101,7 +104,8 @@ export const DEMO_MENU: CompiledMenu = {
 export function uploadedMenu(
   label: string,
   items: CompiledItem[],
-  vocabulary: MenuVocabulary
+  vocabulary: MenuVocabulary,
+  trace?: ExtractionTrace
 ): CompiledMenu {
   /* The settings step is app-authored, so its shape is decided here rather
      than by the extraction: a neutral spice scale, and never any sides. */
@@ -117,5 +121,6 @@ export function uploadedMenu(
     vocabulary: resolved,
     questions: buildQuestions(resolved),
     filterOptions: filterOptionsOf(resolved),
+    trace,
   };
 }
