@@ -9,7 +9,8 @@ alwaysApply: false
 ## Structure (split the reference single-file into these)
 - `Landing.tsx` — clean compiler-feel first screen, diet toggle, and a
   collapsible "how this tool works" disclosure. Keep it sparse. Demo is the
-  primary CTA; "compile your own menu PDF" is a secondary **beta** path.
+  primary CTA; "compile your own menu PDF" is a secondary **beta** path
+  (`BetaBadge`: light cream on gold, not faint brown).
 - `MenuUpload.tsx` — single file input. Copy must say text-based mains, not
   scans. Failures show the extraction trace; sparse-text ≠ too-few-dishes.
 - `DecompileLog.tsx` — the four-stage READ / TOKENIZE / MEASURE / BUILD

@@ -61,6 +61,40 @@ describe("shape validation — model output is checked, never repaired", () => {
     expect(result.slice.proposed).toBe(0);
   });
 
+  it("accepts singular style/protein strings without inventing values", () => {
+    const extraction = rawExtraction();
+    const items = [
+      ...extraction.items.map(({ evidence: _ignored, ...item }) => item),
+      {
+        name: "Galouti kebab",
+        plain: "Minced lamb patties with warming spices.",
+        format: "plate",
+        protein: "lamb",
+        style: "spicy",
+      },
+    ];
+    const source = `${sourceFor(extraction)}\nGalouti kebab — minced lamb, warming spices 12.50\n`;
+    const result = validateExtraction({ items }, source);
+    if (!result.ok) throw new Error(result.code);
+    const galouti = result.menu.items.find((i) => i.name === "Galouti kebab");
+    expect(galouti?.proteins).toEqual(["lamb"]);
+    expect(galouti?.styles).toEqual(["spicy"]);
+  });
+
+  it("rejects a style that is a recipe sentence rather than a flavour family", () => {
+    const raw = rawExtraction();
+    raw.items.push(
+      rawItem({
+        name: "Nandu Pillow",
+        styles: "sweet chilli fenugreek paprika with pakora and chat puri",
+      })
+    );
+    const result = validateExtraction(raw, sourceFor(raw));
+    if (!result.ok) throw new Error(result.code);
+    expect(result.menu.items.map((i) => i.name)).not.toContain("Nandu Pillow");
+    expect(result.slice.drops.unknown_style).toBeGreaterThanOrEqual(1);
+  });
+
   it("drops an item whose format is not a usable slug", () => {
     const raw = rawExtraction();
     raw.items.push(rawItem({ name: "Mystery Bowl", format: "" }));

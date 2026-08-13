@@ -1,4 +1,5 @@
 import { T } from "../theme";
+import BetaBadge from "./BetaBadge";
 import { ASK_COST } from "../lib/entropy";
 import type { Stats } from "../lib/stats";
 import { DIETS } from "../data/config";
@@ -142,8 +143,7 @@ export default function Landing({
           "↺ back to the demo menu"
         ) : (
           <>
-            ↑ compile your own menu PDF{" "}
-            <span style={{ color: T.faint }}>beta</span>
+            ↑ compile your own menu PDF <BetaBadge />
           </>
         )}
       </button>

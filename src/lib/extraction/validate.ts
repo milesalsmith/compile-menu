@@ -32,12 +32,18 @@ const ITEM_KEYS = [
   "plain",
   "format",
   "proteins",
+  "protein",
   "styles",
+  "style",
   "vegetarian",
   "vegan",
   "heat",
   "portion",
 ] as const;
+
+/* Flavour-family slugs, not a dumped recipe. "black-pepper" is a style;
+   "sweet-chilli-fenugreek-paprika-with-pakora" is a sentence. */
+const MAX_STYLE_SLUG_PARTS = 4;
 
 /* Names a model reaches for when it cannot find one. An item without a
    discernible name is dropped, never given an invented one. */
@@ -111,6 +117,25 @@ function optionId(value: unknown): string | null {
   if (raw === null) return null;
   const id = raw.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return id.length > 0 ? id : null;
+}
+
+function slugFrom(value: unknown): string | null {
+  if (isRecord(value)) return optionId(value.id);
+  return optionId(value);
+}
+
+function asIdList(raw: unknown, opts: { flavour?: boolean } = {}): string[] | null {
+  if (raw === undefined || raw === null) return null;
+  const ids: string[] = [];
+  const entries = typeof raw === "string" ? [raw] : Array.isArray(raw) ? raw : null;
+  if (entries === null) return null;
+  for (const entry of entries) {
+    const id = slugFrom(entry);
+    if (id === null) return null;
+    if (opts.flavour && id.split("-").filter(Boolean).length > MAX_STYLE_SLUG_PARTS) return null;
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return ids.length > 0 ? ids : null;
 }
 
 function slug(name: string): string {
@@ -281,21 +306,13 @@ function parseItem(value: unknown, original: string, sourceFold: FoldedText): Pa
   const format = optionId(value.format);
   if (format === null) return { ok: false, reason: "unknown_format", name };
 
-  const list = (raw: unknown, reason: DropReason): string[] | DropReason => {
-    if (!Array.isArray(raw)) return reason;
-    const ids: string[] = [];
-    for (const entry of raw) {
-      const id = optionId(entry);
-      if (id === null) return reason;
-      if (!ids.includes(id)) ids.push(id);
-    }
-    return ids.length > 0 ? ids : reason;
-  };
-
-  const proteins = list(value.proteins, "unknown_protein");
-  if (typeof proteins === "string") return { ok: false, reason: proteins, name };
-  const styles = list(value.styles, "unknown_style");
-  if (typeof styles === "string") return { ok: false, reason: styles, name };
+  /* Locate the attribute list — string vs array vs singular key — without
+     inventing values. Curry-house runs often emit style: "spicy" instead of
+     styles: ["spicy"]; that is the same claim, not a repair. */
+  const proteins = asIdList(value.proteins ?? value.protein);
+  if (proteins === null) return { ok: false, reason: "unknown_protein", name };
+  const styles = asIdList(value.styles ?? value.style, { flavour: true });
+  if (styles === null) return { ok: false, reason: "unknown_style", name };
 
   const flags = ["vegetarian", "vegan", "heat", "portion"] as const;
   if (flags.some((f) => value[f] !== undefined && typeof value[f] !== "boolean")) {

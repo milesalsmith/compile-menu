@@ -24,6 +24,12 @@ describe("extraction contract — mains only, same posture as the demo", () => {
     expect(EXTRACTION_SYSTEM_PROMPT.toLowerCase()).toMatch(/no vocabulary object/);
   });
 
+  it("asks for short flavour-family styles, never a recipe sentence", () => {
+    expect(EXTRACTION_SYSTEM_PROMPT.toLowerCase()).toMatch(/flavour family/);
+    expect(EXTRACTION_SYSTEM_PROMPT.toLowerCase()).toMatch(/never omit/);
+    expect(EXTRACTION_SYSTEM_PROMPT.toLowerCase()).toMatch(/not "style"/);
+  });
+
   it("unwraps fenced JSON without repairing the payload", () => {
     expect(parseModelJson('```json\n{"items":[]}\n```')).toEqual({ items: [] });
     expect(parseModelJson({ items: [] })).toEqual({ items: [] });

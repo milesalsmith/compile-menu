@@ -53,6 +53,10 @@ alwaysApply: false
   as the demo dataset: a decision set, not a full a la carte dump. Soups,
   starters, sides and extras are out. If the menu is larger, prefer spread
   across the three slots over page order.
+- Attribute lists (`proteins` / `styles`) may arrive as a string or under the
+  singular key (`protein` / `style`). That is locating the field, not inventing
+  a value. Style slugs must be a short flavour family (≤4 hyphen parts), not a
+  dumped recipe sentence. Never default a missing style to "classic".
 - SOURCE GROUNDING. The model emits a dish list only. Vocabulary is derived
   from surviving items — a model-declared option set only proved that the
   model agreed with itself. Anything load-bearing is checked against the

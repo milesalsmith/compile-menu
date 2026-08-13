@@ -6,6 +6,7 @@ import { uploadedMenu } from "../lib/menu";
 import type { ExtractionTrace } from "../lib/extraction/trace";
 import { MAX_UPLOAD_BYTES, PDF_MIME } from "../lib/extraction/pipeline";
 import ExtractionTracePanel from "./ExtractionTracePanel";
+import BetaBadge from "./BetaBadge";
 
 /* One round-trip. The long wait is Workers AI (convert + extract), not
    schema validation — that last step is milliseconds of TypeScript. */
@@ -88,10 +89,7 @@ export default function MenuUpload({ onCompiled, onCancel }: MenuUploadProps) {
         className="display"
         style={{ fontSize: "clamp(26px, 5vw, 34px)", fontWeight: 600, margin: "0 0 8px" }}
       >
-        Compile your own menu.{" "}
-        <span className="mono" style={{ color: T.faint, fontSize: 13, fontWeight: 500 }}>
-          beta
-        </span>
+        Compile your own menu. <BetaBadge />
       </h2>
       <p style={{ color: T.dim, fontSize: 14.5, lineHeight: 1.55, maxWidth: 460, marginBottom: 22 }}>
         Upload a text-based mains PDF — itemised dishes, not a photo or scan of the page. It's read

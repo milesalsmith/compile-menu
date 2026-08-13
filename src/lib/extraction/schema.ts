@@ -52,7 +52,7 @@ Each item:
 - "plain": one sentence describing the components. Do not repeat the name. Do not use a brand name.
 - "format": how it is served, a lowercase slug using the menu's own words (bowl, wrap, pizza, plate, taco, curry, ...).
 - "proteins": array of lowercase slugs for the main component(s). Vegetarian dishes use ["veg"] only.
-- "styles": array of lowercase slugs for the flavour family (classic, spicy, creamy, fresh, ...).
+- "styles": array of 1–3 short lowercase slugs for the flavour family only (spicy, creamy, tomato, dry, tandoori, sweet, classic, ...). Never omit it. Never a full sentence or ingredient list. Use the key "styles", not "style".
 - "vegetarian" / "vegan": true only if the menu itself marks that dish (V, VE, vegetarian, vegan). Otherwise omit or false. vegan implies vegetarian.
 - "heat": true only if the customer can choose a spice level for that dish.
 
