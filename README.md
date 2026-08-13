@@ -56,23 +56,25 @@ Requires Node 22.13+ (pinned via `.nvmrc` / `engines`).
 
 ## Compile your own menu (PDF)
 
-From the landing page you can upload a restaurant menu PDF. The pipeline is
+From the landing page you can upload a restaurant menu PDF (**beta**). Works on
+**text-based, itemised** mains — not scans or photos of a page. The pipeline is
 Cloudflare-native end to end — no third-party AI key:
 
 ```
 PDF upload
   → Workers AI toMarkdown (document metadata suppressed)
-  → Workers AI JSON Mode (structured extraction)
+  → Workers AI JSON Mode (dish list)
   → deterministic source grounding + validation
-  → per-menu vocabulary
+  → per-menu vocabulary derived from surviving items
   → the same information-gain compiler as the demo
 ```
 
 The model **interprets the document only**. It leaves the decision loop before
 any recommendation: names, dietary flags and size variants are checked against
-the converted markdown; invented attributes are dropped; a menu with too few
-items or no attribute variety is refused. Recommendation, question order and
-tie-breaks stay pure TypeScript.
+the converted markdown; invented attributes are dropped; vocabulary is derived
+from what survives, never trusted from the model; a menu with too few items or
+no attribute variety is refused. Recommendation, question order and tie-breaks
+stay pure TypeScript.
 
 Uploaded menus are **ephemeral**. They live in that browser tab's memory for
 the session. Nothing is persisted, nothing is written to disk, and nothing is
@@ -80,8 +82,10 @@ hosted as a branded directory. Closing the tab forgets the menu.
 
 Hard gates before any expensive work: platform rate limiting on
 `POST /api/extract`, an 8 MB size cap, a `%PDF-` signature check (client MIME
-is advisory), and an explicit refusal when converted text exceeds the reliable
-extraction ceiling (~50k characters) — never a silent truncation.
+is advisory), a **sparse-text refusal** when conversion yields almost nothing
+(image-only PDFs — not "too few dishes"), and an explicit refusal when converted
+text exceeds the reliable extraction ceiling (~50k characters) — never a silent
+truncation.
 
 ## The engine, verified
 

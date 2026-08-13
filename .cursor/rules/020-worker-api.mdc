@@ -25,15 +25,21 @@ alwaysApply: false
 - Conversion: `env.AI.toMarkdown({ name, blob }, { conversionOptions:
   { pdf: { metadata: false } } })`. Metadata is token noise for extraction.
   A `ConversionResult` with `format === "error"` is a user-facing failure.
-- There is a ceiling (~50k chars) on converted markdown. Past it, FAIL with a
+- There is a floor (~300 chars) and a ceiling (~50k chars) on converted
+  markdown. Below the floor, FAIL as `sparse_text` (scan / image-only) WITHOUT
+  calling the extraction model — field testing: PDFium photo menus yielded ~60
+  chars and were mislabelled `too_few_items`. Past the ceiling, FAIL with a
   friendly message. Never truncate silently: compiling part of a document and
   presenting it as the menu is a quietly wrong answer, which is worse than a
   refusal.
-- Extraction model: Workers AI text model supporting JSON Mode, pinned in a
-  single constant so it can be swapped. Request structured output via
-  `response_format: { type: "json_schema", json_schema: {...} }`.
-- Workers AI does NOT guarantee schema compliance; it returns an explicit
-  `JSON Mode couldn't be met` error. Handle it as its own failure mode.
+- Extraction model: Workers AI text model, pinned in a single constant so it
+  can be swapped. Prefer a fast JSON-capable model (Llama 4 Scout 17B) over
+  70B. Request `response_format: { type: "json_object" }` — NOT json_schema.
+  Constrained decoding against our nested item schema hit the ~120s inference
+  wall even on a 9k-char menu (proposed 0). The deterministic fence is the
+  schema; JSON Mode is only "emit an object".
+- Workers AI does NOT guarantee schema compliance; `JSON Mode couldn't be met`
+  and unparseable payloads are their own failure mode (`schema_not_met`).
 - Bindings in wrangler.jsonc: `"ai": { "binding": "AI", "remote": true }`
   (Workers AI has no local emulation, so dev calls the real service) and one
   `ratelimits` entry for the extraction route.
@@ -43,17 +49,24 @@ alwaysApply: false
 - Validate deterministically. Reject invalid or model-invented output;
   never silently repair. Require >= 4 valid items AND enough attribute
   variety that at least one filter question clears ASK_COST.
-- SOURCE GROUNDING. Vocabulary closure proves only that the model agrees with
-  itself — it writes both the option list and the attributes. Anything
-  load-bearing is checked against the converted markdown, which is the one
-  input to this step the model did not write. A model-generated value is
-  never treated as grounded because it matches another model-generated field.
-  - Every item carries quoted `evidence` from the document. The evidence must
-    appear in the markdown, the item's name must appear inside the evidence,
-    and evidence is length-capped so quoting the whole document proves
-    nothing.
+- Extraction asks for MAINS ONLY, capped (MAX_EXTRACTED_MAINS). Same posture
+  as the demo dataset: a decision set, not a full a la carte dump. Soups,
+  starters, sides and extras are out. If the menu is larger, prefer spread
+  across the three slots over page order.
+- SOURCE GROUNDING. The model emits a dish list only. Vocabulary is derived
+  from surviving items — a model-declared option set only proved that the
+  model agreed with itself. Anything load-bearing is checked against the
+  converted markdown, which is the one input to this step the model did not
+  write. A model-generated value is never treated as grounded because it
+  matches another model-generated field.
+  - Every item's `name` must appear in the converted markdown. Grounding folds
+    diacritics, apostrophes and `&`/`and` — encoding, not a renamed dish.
+    Quoted `evidence` is optional; if present it must appear in the markdown,
+    contain the name, and is length-capped so quoting the whole document
+    proves nothing.
   - `vegetarian` / `vegan` are only true when the document itself marks them
-    in that item's evidence. Never infer either from ingredients. Dietary
+    near that item's name (quoted evidence if supplied, otherwise the name's
+    line ± one neighbour). Never infer either from ingredients. Dietary
     status is a hard constraint on the universe, so an ungrounded claim gets
     the item rejected, not downgraded.
 - Portion collapse requires more than a matching normalised name: every
@@ -61,6 +74,10 @@ alwaysApply: false
   differing attributes means two products, and merging them would erase a
   real branch of the decision tree.
 - Never log, persist, or write to disk any uploaded file or derived content.
+- Diagnostics: every extract response carries a trace (timings, proposed/kept
+  counts, drop-reason tallies). Worker logs use reason codes and numbers only.
+  The uploader's tab may show drop samples with names — that is session UI,
+  not a log. Never put markdown, evidence, or error message bodies in logs.
 - The engine that consumes the result stays deterministic. Extraction is the
   only probabilistic step in the whole app.
 
