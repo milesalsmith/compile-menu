@@ -1,13 +1,15 @@
 import { extractMenu } from "../src/lib/extraction/pipeline";
 import type { UploadedFile } from "../src/lib/extraction/pipeline";
+import type { ExtractionTrace } from "../src/lib/extraction/trace";
+import { traceForLog } from "../src/lib/extraction/trace";
 import { menuAi } from "./ai";
 
 /* Nothing here persists, logs or forwards the uploaded document. The PDF
    lives in this request's memory and the compiled menu goes straight back to
    the browser that sent it (rule 020-worker-api.mdc). */
 
-function error(status: number, code: string, message: string): Response {
-  return Response.json({ code, error: message }, { status });
+function error(status: number, code: string, message: string, trace?: ExtractionTrace): Response {
+  return Response.json(trace ? { code, error: message, trace } : { code, error: message }, { status });
 }
 
 /* Cloudflare's own rate limiter, keyed on the caller. Deliberately not a
@@ -58,13 +60,14 @@ async function handleExtract(request: Request, env: Env): Promise<Response> {
 
   const result = await extractMenu(file, menuAi(env.AI));
   if (!result.ok) {
-    /* A reason code only — never the document, the markdown, or the model's
-       output. */
-    console.error(`extract failed: ${result.code}`);
-    return error(result.status, result.code, result.message);
+    /* Reason codes + timings + drop counts — never the document, markdown,
+       or model output. */
+    console.error(`extract failed: ${result.code} ${traceForLog(result.trace)}`);
+    return error(result.status, result.code, result.message, result.trace);
   }
 
-  return Response.json(result.menu);
+  console.log(`extract ok ${traceForLog(result.trace)}`);
+  return Response.json({ ...result.menu, trace: result.trace });
 }
 
 export default {

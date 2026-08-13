@@ -11,7 +11,7 @@ export interface RawOption {
 export type RawItem = Record<string, unknown>;
 
 export interface RawExtraction {
-  vocabulary: { format: RawOption[]; protein: RawOption[]; style: RawOption[] };
+  vocabulary?: { format: RawOption[]; protein: RawOption[]; style: RawOption[] };
   items: RawItem[];
 }
 
@@ -91,7 +91,10 @@ export function rawExtraction(overrides: Partial<RawExtraction> = {}): RawExtrac
    document containing it and only has to think about the gate it's probing. */
 export function sourceFor(extraction: RawExtraction): string {
   const lines = extraction.items
-    .map((item) => (typeof item.evidence === "string" ? item.evidence : ""))
+    .map((item) => {
+      if (typeof item.evidence === "string" && item.evidence.length > 0) return item.evidence;
+      return typeof item.name === "string" ? item.name : "";
+    })
     .filter((line) => line.length > 0);
   return ["# Menu", "", "## Mains", "", ...lines, ""].join("\n");
 }

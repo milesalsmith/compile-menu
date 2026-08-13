@@ -22,22 +22,48 @@ describe("shape validation — model output is checked, never repaired", () => {
   });
 
   it("rejects output that is not an object", () => {
-    expect(validateExtraction("[]", "")).toEqual({ ok: false, code: "invalid_output" });
-    expect(validateExtraction(null, "")).toEqual({ ok: false, code: "invalid_output" });
-    expect(validateExtraction([rawItem()], "")).toEqual({ ok: false, code: "invalid_output" });
+    expect(validateExtraction("[]", "")).toMatchObject({ ok: false, code: "invalid_output" });
+    expect(validateExtraction(null, "")).toMatchObject({ ok: false, code: "invalid_output" });
+    expect(validateExtraction([rawItem()], "")).toMatchObject({ ok: false, code: "invalid_output" });
   });
 
-  it("rejects output with no declared vocabulary", () => {
+  it("accepts a dish list without a model-declared vocabulary and derives one", () => {
     const raw = rawExtraction();
-    expect(validateExtraction({ items: raw.items }, sourceFor(raw))).toEqual({
-      ok: false,
-      code: "invalid_output",
+    const result = validateExtraction({ items: raw.items }, sourceFor(raw));
+    if (!result.ok) throw new Error(result.code);
+    expect(result.menu.vocabulary.format.map((o) => o.id).sort()).toEqual(
+      ["pizza", "salad", "sandwich"].sort()
+    );
+    expect(result.slice.modelShape).toMatchObject({
+      kind: "object",
+      itemsKey: "items",
+      itemCount: 5,
     });
   });
 
-  it("drops an item whose attribute value was never declared", () => {
+  it("treats a dishes/mains wrapper as the items list, without repairing contents", () => {
     const raw = rawExtraction();
-    raw.items.push(rawItem({ name: "Mystery Bowl", format: "bowl" }));
+    const result = validateExtraction({ dishes: raw.items }, sourceFor(raw));
+    if (!result.ok) throw new Error(result.code);
+    expect(result.menu.items).toHaveLength(5);
+    expect(result.slice.modelShape?.itemsKey).toBe("dishes");
+  });
+
+  it("records the model shape when there is no items array", () => {
+    const result = validateExtraction({ menu: "tacos", count: 12 }, "");
+    expect(result).toMatchObject({ ok: false, code: "invalid_output" });
+    expect(result.slice.modelShape).toMatchObject({
+      kind: "object",
+      keys: ["menu", "count"],
+      itemsKey: null,
+      itemCount: null,
+    });
+    expect(result.slice.proposed).toBe(0);
+  });
+
+  it("drops an item whose format is not a usable slug", () => {
+    const raw = rawExtraction();
+    raw.items.push(rawItem({ name: "Mystery Bowl", format: "" }));
     const names = itemsOf(raw).map((i) => i.name);
     expect(names).not.toContain("Mystery Bowl");
     expect(names).toHaveLength(5);
@@ -52,7 +78,7 @@ describe("shape validation — model output is checked, never repaired", () => {
   it("fails loudly when the model volunteers allergen data", () => {
     const raw = rawExtraction();
     raw.items[0] = rawItem({ allergens: ["milk"] });
-    expect(check(raw)).toEqual({ ok: false, code: "unsafe_field" });
+    expect(check(raw)).toMatchObject({ ok: false, code: "unsafe_field" });
   });
 
   it("keeps vegetarian items on the veg protein id the engine assumes", () => {
@@ -68,10 +94,20 @@ describe("shape validation — model output is checked, never repaired", () => {
   });
 });
 
-/* The model writes both the vocabulary and the attributes it fills in, so
-   agreement between those two proves only that it is self-consistent. These
-   check the one input it did not write: the converted document. */
+/* Attribute slugs and a model-declared vocabulary only prove the model
+   agrees with itself. These check the one input it did not write: the
+   converted document. */
 describe("source grounding — the document is the authority, not the model", () => {
+  it("records why an ungrounded item was dropped without failing the whole menu", () => {
+    const raw = rawExtraction();
+    raw.items.push(rawItem({ name: "Truffle Pizza", evidence: "Truffle Pizza 14.00" }));
+    const result = validateExtraction(raw, sourceFor(rawExtraction()));
+    if (!result.ok) throw new Error(result.code);
+    expect(result.slice.drops.evidence_not_in_source).toBeGreaterThanOrEqual(1);
+    expect(result.slice.samples.some((s) => s.name === "Truffle Pizza")).toBe(true);
+    expect(result.menu.items.map((i) => i.name)).not.toContain("Truffle Pizza");
+  });
+
   it("drops an item whose name never appears in the document", () => {
     const raw = rawExtraction();
     raw.items.push(
@@ -126,6 +162,87 @@ describe("source grounding — the document is the authority, not the model", ()
     const source = `${sourceFor(rawExtraction())}\n| **Nduja Pizza** | _spicy sausage_ | 12.50 |\n`;
     expect(itemsOf(raw, source).map((i) => i.name)).toContain("Nduja Pizza");
   });
+
+  it("grounds by name alone when evidence is omitted", () => {
+    const extraction = rawExtraction();
+    const items = extraction.items.map(({ evidence: _ignored, ...item }) => item);
+    const result = validateExtraction({ items }, sourceFor(extraction));
+    if (!result.ok) throw new Error(result.code);
+    expect(result.menu.items).toHaveLength(5);
+  });
+
+  it("folds apostrophes so Cinco's and CINCOS are the same printed name", () => {
+    const extraction = rawExtraction();
+    const items = [
+      ...extraction.items.map(({ evidence: _ignored, ...item }) => item),
+      {
+        name: "CINCO'S NACHOS",
+        plain: "Tortilla chips with cheese, salsa and jalapenos.",
+        format: "plate",
+        proteins: ["veg"],
+        styles: ["classic"],
+        vegetarian: true,
+      },
+    ];
+    const source = `${sourceFor(extraction)}\nCinco Nachos (V) — chips, cheese, salsa 8.50\n`;
+    const result = validateExtraction({ items }, source);
+    if (!result.ok) throw new Error(result.code);
+    expect(result.menu.items.map((i) => i.name)).toContain("CINCO'S NACHOS");
+  });
+
+  it("folds diacritics and compound words without renaming the dish", () => {
+    const extraction = rawExtraction();
+    const items = [
+      ...extraction.items.map(({ evidence: _ignored, ...item }) => item),
+      {
+        name: "FIRE CRACKER JALAPEÑOS",
+        plain: "Battered jalapenos with a chilli dip.",
+        format: "plate",
+        proteins: ["veg"],
+        styles: ["spicy"],
+        vegetarian: true,
+      },
+    ];
+    const source = `${sourceFor(extraction)}\nFirecracker Jalapenos (V) 6.50\n`;
+    const result = validateExtraction({ items }, source);
+    if (!result.ok) throw new Error(result.code);
+    expect(result.menu.items.map((i) => i.name)).toContain("FIRE CRACKER JALAPEÑOS");
+  });
+
+  it("drops an item whose name never appears in the document when evidence is omitted", () => {
+    const extraction = rawExtraction();
+    const items = [
+      ...extraction.items.map(({ evidence: _ignored, ...item }) => item),
+      {
+        name: "Truffle Pizza",
+        plain: "A thin base with mushroom and mozzarella.",
+        format: "pizza",
+        proteins: ["beef"],
+        styles: ["classic"],
+      },
+    ];
+    const result = validateExtraction({ items }, sourceFor(extraction));
+    if (!result.ok) throw new Error(result.code);
+    expect(result.slice.drops.name_not_in_source).toBeGreaterThanOrEqual(1);
+    expect(result.menu.items.map((i) => i.name)).not.toContain("Truffle Pizza");
+  });
+
+  it("defaults omitted dietary and settings flags to false", () => {
+    const raw = rawExtraction();
+    raw.items.push({
+      name: "Calzone",
+      evidence: "Calzone — folded pizza 11.00",
+      plain: "A folded pizza with tomato and mozzarella.",
+      format: "pizza",
+      proteins: ["beef"],
+      styles: ["classic"],
+    });
+    const calzone = itemsOf(raw).find((i) => i.name === "Calzone");
+    expect(calzone?.vegetarian).toBe(false);
+    expect(calzone?.vegan).toBe(false);
+    expect(calzone?.heat).toBe(false);
+    expect(calzone?.portion).toBe(false);
+  });
 });
 
 describe("dietary status is conservative and only ever quoted", () => {
@@ -168,6 +285,25 @@ describe("dietary status is conservative and only ever quoted", () => {
     const falafel = itemsOf(rawExtraction()).find((i) => i.name === "Falafel Salad");
     expect(falafel?.vegan).toBe(true);
     expect(falafel?.vegetarian).toBe(true);
+  });
+
+  it("grounds a vegetarian claim from the line around the name when evidence is omitted", () => {
+    const extraction = rawExtraction();
+    const items = [
+      ...extraction.items.map(({ evidence: _ignored, ...item }) => item),
+      {
+        name: "Garden Pizza",
+        plain: "Tomato, courgette and red onion on a thin base.",
+        format: "pizza",
+        proteins: ["veg"],
+        styles: ["classic"],
+        vegetarian: true,
+      },
+    ];
+    const source = `${sourceFor(extraction)}\nGarden Pizza (V) — tomato, courgette, red onion 10.00\n`;
+    const result = validateExtraction({ items }, source);
+    if (!result.ok) throw new Error(result.code);
+    expect(result.menu.items.find((i) => i.name === "Garden Pizza")?.vegetarian).toBe(true);
   });
 });
 
@@ -268,7 +404,7 @@ describe("gates on the extraction as a whole", () => {
   it("rejects a menu with too few valid items", () => {
     const raw = rawExtraction();
     raw.items = raw.items.slice(0, 3);
-    expect(check(raw)).toEqual({ ok: false, code: "too_few_items" });
+    expect(check(raw)).toMatchObject({ ok: false, code: "too_few_items" });
   });
 
   it("rejects a menu with no attribute variety for the engine to work on", () => {
@@ -279,12 +415,19 @@ describe("gates on the extraction as a whole", () => {
       rawItem({ name: "Bianca" }),
       rawItem({ name: "Ortolana" }),
     ];
-    expect(check(raw)).toEqual({ ok: false, code: "no_variety" });
+    expect(check(raw)).toMatchObject({ ok: false, code: "no_variety" });
   });
 
-  it("prunes vocabulary options no surviving item uses", () => {
+  it("derives vocabulary only from surviving items, ignoring a model option list", () => {
     const raw = rawExtraction();
-    raw.vocabulary.style.push({ id: "smoky", label: "Smoky", note: "" });
+    raw.vocabulary = {
+      format: raw.vocabulary?.format ?? [],
+      protein: raw.vocabulary?.protein ?? [],
+      style: [
+        ...(raw.vocabulary?.style ?? []),
+        { id: "smoky", label: "Smoky", note: "" },
+      ],
+    };
     const result = check(raw);
     if (!result.ok) throw new Error(result.code);
     expect(result.menu.vocabulary.style.map((o) => o.id)).not.toContain("smoky");

@@ -1,5 +1,7 @@
 import type { ExtractionFailure, ValidatedMenu } from "./validate";
 import { validateExtraction } from "./validate";
+import type { ExtractionTrace } from "./trace";
+import { emptyTrace } from "./trace";
 
 /* ---------- EXTRACTION PIPELINE ---------- */
 /* PDF -> markdown -> structured JSON -> deterministic validation. Typed
@@ -8,6 +10,11 @@ import { validateExtraction } from "./validate";
    touching anything in here (rule 020-worker-api.mdc). */
 
 export const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+
+/* Floor on converted text. Image-only / scanned menus from field testing
+   yielded ~60 characters from toMarkdown (pdftotext: 2). Calling extract on
+   that is a wasted inference call and a misleading "too few dishes". */
+export const MIN_MARKDOWN_CHARS = 300;
 
 /* The ceiling on converted text we will extract from reliably. Past it we
    stop rather than quietly compiling a menu from the first N characters and
@@ -32,11 +39,19 @@ export interface ConvertibleFile {
 
 export type ConversionOutcome =
   | { ok: true; markdown: string; mimeType: string }
-  | { ok: false; reason: "conversion_failed" | "ai_unavailable" };
+  | {
+      ok: false;
+      reason: "conversion_failed" | "ai_unavailable" | "ai_timeout" | "ai_rate_limited";
+      errorClass?: string;
+    };
 
 export type ModelOutcome =
   | { ok: true; value: unknown }
-  | { ok: false; reason: "schema_not_met" | "ai_unavailable" };
+  | {
+      ok: false;
+      reason: "schema_not_met" | "ai_unavailable" | "ai_timeout" | "ai_rate_limited";
+      errorClass?: string;
+    };
 
 export interface MenuAiPort {
   toMarkdown(file: ConvertibleFile): Promise<ConversionOutcome>;
@@ -49,14 +64,17 @@ export type ExtractionErrorCode =
   | "empty_file"
   | "not_a_pdf"
   | "conversion_failed"
+  | "sparse_text"
   | "menu_too_long"
   | "ai_unavailable"
+  | "ai_timeout"
+  | "ai_rate_limited"
   | "schema_not_met"
   | ExtractionFailure;
 
 export type ExtractionOutcome =
-  | { ok: true; menu: ValidatedMenu }
-  | { ok: false; code: ExtractionErrorCode; status: number; message: string };
+  | { ok: true; menu: ValidatedMenu; trace: ExtractionTrace }
+  | { ok: false; code: ExtractionErrorCode; status: number; message: string; trace: ExtractionTrace };
 
 /* User-facing copy. Says what went wrong and what to do about it, and never
    leaks a model name, a stack, or anything from the document itself. */
@@ -72,6 +90,11 @@ const FAILURES: Record<ExtractionErrorCode, { status: number; message: string }>
     status: 422,
     message: "We couldn't read any text from that PDF. Scanned or image-only menus won't work.",
   },
+  sparse_text: {
+    status: 422,
+    message:
+      "This PDF doesn't contain readable text. Try a text-based menu — exported or printed from a website — not a photo or scan of the page.",
+  },
   menu_too_long: {
     status: 413,
     message:
@@ -80,6 +103,15 @@ const FAILURES: Record<ExtractionErrorCode, { status: number; message: string }>
   ai_unavailable: {
     status: 503,
     message: "The extraction service is unavailable right now. Try again in a moment.",
+  },
+  ai_timeout: {
+    status: 504,
+    message:
+      "That menu took too long to compile. Try a shorter PDF — just the mains, not the whole brochure.",
+  },
+  ai_rate_limited: {
+    status: 429,
+    message: "The extraction service is busy. Wait a minute and try again.",
   },
   schema_not_met: {
     status: 422,
@@ -105,8 +137,13 @@ const FAILURES: Record<ExtractionErrorCode, { status: number; message: string }>
   },
 };
 
-function fail(code: ExtractionErrorCode): ExtractionOutcome {
-  return { ok: false, code, ...FAILURES[code] };
+function fail(
+  code: ExtractionErrorCode,
+  trace: ExtractionTrace,
+  started: number
+): ExtractionOutcome {
+  trace.timings.totalMs = Date.now() - started;
+  return { ok: false, code, ...FAILURES[code], trace };
 }
 
 /* %PDF- must appear in the header. A little slack for the leading junk some
@@ -125,33 +162,63 @@ function baseMimeType(value: string): string {
 }
 
 export async function extractMenu(file: UploadedFile, ai: MenuAiPort): Promise<ExtractionOutcome> {
+  const started = Date.now();
+  const trace = emptyTrace({ bytes: file.size });
+
   /* The browser's content type is a hint from the client, so it only buys a
      cheap early exit. What the bytes actually are is decided below. */
-  if (file.type !== PDF_MIME) return fail("unsupported_file_type");
-  if (file.size > MAX_UPLOAD_BYTES) return fail("file_too_large");
-  if (file.size === 0) return fail("empty_file");
+  if (file.type !== PDF_MIME) return fail("unsupported_file_type", trace, started);
+  if (file.size > MAX_UPLOAD_BYTES) return fail("file_too_large", trace, started);
+  if (file.size === 0) return fail("empty_file", trace, started);
 
   const bytes = await file.bytes();
-  if (bytes.byteLength === 0) return fail("empty_file");
-  if (bytes.byteLength > MAX_UPLOAD_BYTES) return fail("file_too_large");
-  if (!looksLikePdf(bytes)) return fail("not_a_pdf");
+  trace.bytes = bytes.byteLength;
+  if (bytes.byteLength === 0) return fail("empty_file", trace, started);
+  if (bytes.byteLength > MAX_UPLOAD_BYTES) return fail("file_too_large", trace, started);
+  if (!looksLikePdf(bytes)) return fail("not_a_pdf", trace, started);
 
+  trace.stage = "convert";
+  const convertStarted = Date.now();
   const converted = await ai.toMarkdown({ name: file.name, bytes });
-  if (!converted.ok) return fail(converted.reason);
+  trace.timings.convertMs = Date.now() - convertStarted;
+  if (!converted.ok) {
+    if (converted.errorClass) trace.aiErrorClass = converted.errorClass;
+    return fail(converted.reason, trace, started);
+  }
 
   /* Trust the converter's detected type over the client's claim before any
      of this reaches the extraction model. */
-  if (baseMimeType(converted.mimeType) !== PDF_MIME) return fail("not_a_pdf");
+  if (baseMimeType(converted.mimeType) !== PDF_MIME) return fail("not_a_pdf", trace, started);
 
   const markdown = converted.markdown.trim();
-  if (markdown.length === 0) return fail("conversion_failed");
-  if (markdown.length > MAX_MARKDOWN_CHARS) return fail("menu_too_long");
+  trace.markdownChars = markdown.length;
+  if (markdown.length === 0) return fail("conversion_failed", trace, started);
+  if (markdown.length < MIN_MARKDOWN_CHARS) return fail("sparse_text", trace, started);
+  if (markdown.length > MAX_MARKDOWN_CHARS) return fail("menu_too_long", trace, started);
 
+  trace.stage = "extract";
+  const extractStarted = Date.now();
   const extracted = await ai.extractJson(markdown);
-  if (!extracted.ok) return fail(extracted.reason);
+  trace.timings.extractMs = Date.now() - extractStarted;
+  if (!extracted.ok) {
+    if (extracted.errorClass) trace.aiErrorClass = extracted.errorClass;
+    return fail(extracted.reason, trace, started);
+  }
 
+  trace.stage = "validate";
+  const validateStarted = Date.now();
   const validated = validateExtraction(extracted.value, markdown);
-  if (!validated.ok) return fail(validated.code);
+  trace.timings.validateMs = Date.now() - validateStarted;
+  trace.proposed = validated.slice.proposed;
+  trace.kept = validated.slice.kept;
+  trace.collapsedFrom = validated.slice.collapsedFrom;
+  trace.drops = validated.slice.drops;
+  trace.samples = validated.slice.samples;
+  trace.varietyGain = validated.slice.varietyGain;
+  trace.modelShape = validated.slice.modelShape;
+  if (!validated.ok) return fail(validated.code, trace, started);
 
-  return { ok: true, menu: validated.menu };
+  trace.stage = "done";
+  trace.timings.totalMs = Date.now() - started;
+  return { ok: true, menu: validated.menu, trace };
 }

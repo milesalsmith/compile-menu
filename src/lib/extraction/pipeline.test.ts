@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { MenuAiPort, UploadedFile } from "./pipeline";
-import { MAX_MARKDOWN_CHARS, MAX_UPLOAD_BYTES, extractMenu } from "./pipeline";
+import { MAX_MARKDOWN_CHARS, MAX_UPLOAD_BYTES, MIN_MARKDOWN_CHARS, extractMenu } from "./pipeline";
 import { rawExtraction, sourceFor } from "./fixtures";
 
 const SOURCE = sourceFor(rawExtraction());
@@ -84,6 +84,24 @@ describe("conversion and model failures each surface as themselves", () => {
     expect(result).toMatchObject({ ok: false, code: "conversion_failed" });
   });
 
+  it("refuses a scan that converts to a handful of characters without calling the model", async () => {
+    const ai = port({
+      toMarkdown: async () => ({
+        ok: true,
+        markdown: "Cinco\nwww.example.com\n",
+        mimeType: "application/pdf",
+      }),
+    });
+    const result = await extractMenu(pdf(), ai);
+    expect(result).toMatchObject({ ok: false, code: "sparse_text", status: 422 });
+    if (result.ok) throw new Error("expected failure");
+    expect(result.trace.markdownChars).toBeLessThan(MIN_MARKDOWN_CHARS);
+    expect(result.trace.stage).toBe("convert");
+    expect(ai.extractJson).not.toHaveBeenCalled();
+    expect(result.message).toMatch(/readable text/i);
+    expect(result.message).not.toMatch(/too few dishes/i);
+  });
+
   it("stops when the converter detects something other than a PDF", async () => {
     const ai = port({
       toMarkdown: async () => ({ ok: true, markdown: SOURCE, mimeType: "text/html" }),
@@ -108,6 +126,19 @@ describe("conversion and model failures each surface as themselves", () => {
     const ai = port({ extractJson: async () => ({ ok: false, reason: "ai_unavailable" }) });
     const result = await extractMenu(pdf(), ai);
     expect(result).toMatchObject({ ok: false, code: "ai_unavailable", status: 503 });
+    expect(result.trace.stage).toBe("extract");
+    expect(result.trace.timings.extractMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("reports a model timeout as itself, not a generic outage", async () => {
+    const ai = port({
+      extractJson: async () => ({ ok: false, reason: "ai_timeout", errorClass: "TimeoutError" }),
+    });
+    const result = await extractMenu(pdf(), ai);
+    expect(result).toMatchObject({ ok: false, code: "ai_timeout", status: 504 });
+    if (result.ok) throw new Error("expected failure");
+    expect(result.trace.aiErrorClass).toBe("TimeoutError");
+    expect(result.message).not.toMatch(/unavailable/i);
   });
 
   it("handles the model being unable to satisfy the schema", async () => {
@@ -120,6 +151,22 @@ describe("conversion and model failures each surface as themselves", () => {
     const ai = port({ extractJson: async () => ({ ok: true, value: { items: "lots" } }) });
     const result = await extractMenu(pdf(), ai);
     expect(result).toMatchObject({ ok: false, code: "invalid_output" });
+    expect(result.trace.modelShape).toMatchObject({
+      kind: "object",
+      keys: ["items"],
+      itemsKey: null,
+    });
+  });
+
+  it("compiles a dish list with no model vocabulary", async () => {
+    const extraction = rawExtraction();
+    const ai = port({
+      extractJson: async () => ({ ok: true, value: { items: extraction.items } }),
+    });
+    const result = await extractMenu(pdf(), ai);
+    if (!result.ok) throw new Error(result.code);
+    expect(result.menu.items).toHaveLength(5);
+    expect(result.trace.modelShape?.itemsKey).toBe("items");
   });
 
   it("never leaks internals in a user-facing message", async () => {
@@ -135,6 +182,9 @@ describe("a valid upload compiles", () => {
     const result = await extractMenu(pdf(), port());
     if (!result.ok) throw new Error(result.code);
     expect(result.menu.items).toHaveLength(5);
+    expect(result.trace.stage).toBe("done");
+    expect(result.trace.proposed).toBe(5);
+    expect(result.trace.kept).toBe(5);
     expect(result.menu.vocabulary.format.map((o) => o.id)).toEqual([
       "pizza",
       "salad",
