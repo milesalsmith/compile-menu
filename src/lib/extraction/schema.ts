@@ -23,6 +23,7 @@ const item = {
     vegan: { type: "boolean" },
     heat: { type: "boolean" },
     portion: { type: "boolean" },
+    allergens: { type: "array", items: { type: "string" } },
     /* Optional. If present it is still checked; if absent the name itself
        must appear in the converted markdown. */
     evidence: { type: "string" },
