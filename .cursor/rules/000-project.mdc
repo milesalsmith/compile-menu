@@ -17,7 +17,7 @@ recovers the decisions hiding under the products.
 - Cloudflare Workers via `@cloudflare/vite-plugin` (static assets + one `/api/*` route)
 - pnpm, Node 22+, developed WSL2-native (Linux = production parity)
 - Vitest for tests
-- Anthropic API for menu extraction ONLY (never for recommendation logic)
+- Workers AI for menu extraction ONLY (never for recommendation logic)
 
 ## Settled decisions — treat as constraints, do not relitigate or "improve"
 1. Engine is ID3-style information-gain induction, generalised for
