@@ -1,10 +1,23 @@
 #!/usr/bin/env node
 /**
- * compile.menu redline — refuse, never repair (rule 000).
- * Plain Node so Cursor's hook process (Node 20) can run it.
+ * Cursor hooks for this repo — not part of the website or the engine.
+ * Rules advise. This script stops the write. Refuse, never repair.
  *
- * Scanned surfaces are narrow on purpose. Comments, README, and the fence
- * tests that deliberately contain allergens: ["milk"] are out of scope.
+ * Wired in .cursor/hooks.json:
+ *   preToolUse            → this file (fail-closed)
+ *   beforeShellExecution  → deploy-from-main.mjs (fail-open)
+ *
+ * Denies Write/Edit/Delete that would:
+ *   - add allergen/gluten keys to schema.ts / types.ts / menu.ts / worker/
+ *   - put nando / peri-peri in demo-menu.ts
+ *   - delete verified-number strings from entropy.test.ts / flow.test.ts
+ *
+ * Asks before wrangler/pnpm deploy unless HEAD is main.
+ * Ignores comments, README, and the fence's own allergen-rejection tests.
+ *
+ * CLI: node .cursor/hooks/redline.mjs --check-tree
+ * Why this exists: .cursor/rules/000-project.mdc (items 5–6).
+ * Locked by: src/lib/redline.test.ts
  */
 
 import { execFileSync } from "node:child_process";
