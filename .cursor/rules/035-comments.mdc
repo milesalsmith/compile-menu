@@ -1,0 +1,26 @@
+---
+description: How to comment generated code — purpose and why, not narration
+alwaysApply: true
+---
+
+# Comments on generated files
+
+When you create or substantially edit a file, leave a short comment that
+a future reader (or an interviewer glancing at the header) can use.
+
+Do:
+
+- File-top or function-top: **what this is for** and **why it exists**
+  (boundary, invariant, deliberate non-goal).
+- Match the voice already in `src/lib/entropy.ts`, `flow.ts`, `validate.ts`,
+  `pipeline.ts`, `worker/ai.ts` — complete sentences, not slogans.
+- Point at the rule or test that locks the behaviour when there is one
+  (e.g. rule 000, `entropy.test.ts`).
+
+Do not:
+
+- Narrate the next line (`// increment i`, `// return the result`).
+- Repeat the function name in prose.
+- Spray comments on every block of a file that already has a header.
+- Add comments to a tiny obvious edit unless the *why* would otherwise
+  be invisible.
